@@ -482,6 +482,7 @@ int responderrobo(){
     return(0);
   }
   
+  //jogar a carta suprema
   int storage_array[3];
   Vector<int> maiores(storage_array);
   if (forca(carta1)>forca(cartajogador)) maiores.push_back(carta1);
