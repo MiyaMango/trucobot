@@ -51,7 +51,7 @@ void setup() {
 byte Card[16][4]; //matriz para armazenar os dados do ultimo NFC lido
 int carta1, carta2, carta3, cartajogador, j1, j2, j3; //variaveis para armazenar as cartas
 int pjogador, probo, pontosemjogo; //variaveis para armazenar os pontos
-int rodadaatual, vez = 2;
+int maoatual, rodadaatual, vez = 2; //variaveis relacionadas ao estado de jogo
 
 //int EstadoTruco = 0, EstadoFugir = 0, EstadoAumentar = 0, EstadoAceitar = 0; <- coisas relacionadas a truco, ñ implementado
 
@@ -128,7 +128,7 @@ void ShowInfo(){
 int jogar(int n){
   int idjogada = -1;
   if(n == 1){
-  Serial.print("Jogando carta 1: ");
+  Serial.print(F("Jogando carta 1: "));
   Serial.println(nomear(carta1));
   servo1.write(130);
   delay(400);
@@ -137,7 +137,7 @@ int jogar(int n){
   carta1 = -1;
   }
   if(n == 2){
-  Serial.print("Jogando carta 2: ");
+  Serial.print(F("Jogando carta 2: "));
   Serial.println(nomear(carta2));
   servo2.write(130);
   delay(400);
@@ -146,7 +146,7 @@ int jogar(int n){
   carta2 = -1;
   }
   if(n == 3){
-  Serial.print("Jogando carta 3: ");
+  Serial.print(F("Jogando carta 3: "));
   Serial.println(nomear(carta3));
   servo3.write(130);
   delay(400);
@@ -155,7 +155,7 @@ int jogar(int n){
   carta3 = -1;
   }
   if(n < 1 || n > 3){
-    Serial.print("Tentando jogar carta inválida! n = ");
+    Serial.print(F("Tentando jogar carta inválida! n = "));
     Serial.println(n, DEC);
   }
   return idjogada;
@@ -163,46 +163,46 @@ int jogar(int n){
 
 //funcao hardcoded que recebe o numero de uma carta e retorna uma string com seu nome
 String nomear(int numcarta){
-  if(numcarta == 1) return("Quatro de ouros");
-  if(numcarta == 2) return("Quatro de espadas");
-  if(numcarta == 3) return("Quatro de copas");
-  if(numcarta == 4) return("Cinco de copas");
-  if(numcarta == 5) return("Cinco de espadas");
-  if(numcarta == 6) return("Cinco de ouros");
-  if(numcarta == 7) return("Cinco de paus");
-  if(numcarta == 8) return("Seis de copas");
-  if(numcarta == 9) return("Seis de ouros");
-  if(numcarta == 10) return("Seis de paus");
-  if(numcarta == 11) return("Seis de espadas");
-  if(numcarta == 12) return("Sete de espadas");
-  if(numcarta == 13) return("Sete de paus");
-  if(numcarta == 14) return("Rainha de paus");
-  if(numcarta == 15) return("Rainha de ouros");
-  if(numcarta == 16) return("Rainha de espadas");
-  if(numcarta == 17) return("Rainha de copas");
-  if(numcarta == 18) return("Valete de espadas");
-  if(numcarta == 19) return("Valete de paus");
-  if(numcarta == 20) return("Valete de copas");
-  if(numcarta == 21) return("Valete de ouros");
-  if(numcarta == 22) return("Rei de ouros");
-  if(numcarta == 23) return("Rei de paus");
-  if(numcarta == 24) return("Rei de copas");
-  if(numcarta == 25) return("Rei de espadas");
-  if(numcarta == 26) return("As de copas");
-  if(numcarta == 27) return("As de paus");
-  if(numcarta == 28) return("As de ouros");
-  if(numcarta == 29) return("Dois de ouros"); 
-  if(numcarta == 30) return("Dois de paus");
-  if(numcarta == 31) return("Dois de espadas");
-  if(numcarta == 32) return("Dois de copas");
-  if(numcarta == 33) return("Tres de ouros");
-  if(numcarta == 34) return("Tres de espadas");
-  if(numcarta == 35) return("Tres de copas");
-  if(numcarta == 36) return("Tres de paus");
-  if(numcarta == 37) return("Pica fumo");
-  if(numcarta == 38) return("Espadilha");
-  if(numcarta == 39) return("Copeta");
-  if(numcarta == 40) return("Zap");
+  if(numcarta == 1) return(F("Quatro de ouros"));
+  if(numcarta == 2) return(F("Quatro de espadas"));
+  if(numcarta == 3) return(F("Quatro de copas"));
+  if(numcarta == 4) return(F("Cinco de copas"));
+  if(numcarta == 5) return(F("Cinco de espadas"));
+  if(numcarta == 6) return(F("Cinco de ouros"));
+  if(numcarta == 7) return(F("Cinco de paus"));
+  if(numcarta == 8) return(F("Seis de copas"));
+  if(numcarta == 9) return(F("Seis de ouros"));
+  if(numcarta == 10) return(F("Seis de paus"));
+  if(numcarta == 11) return(F("Seis de espadas"));
+  if(numcarta == 12) return(F("Sete de espadas"));
+  if(numcarta == 13) return(F("Sete de paus"));
+  if(numcarta == 14) return(F("Rainha de paus"));
+  if(numcarta == 15) return(F("Rainha de ouros"));
+  if(numcarta == 16) return(F("Rainha de espadas"));
+  if(numcarta == 17) return(F("Rainha de copas"));
+  if(numcarta == 18) return(F("Valete de espadas"));
+  if(numcarta == 19) return(F("Valete de paus"));
+  if(numcarta == 20) return(F("Valete de copas"));
+  if(numcarta == 21) return(F("Valete de ouros"));
+  if(numcarta == 22) return(F("Rei de ouros"));
+  if(numcarta == 23) return(F("Rei de paus"));
+  if(numcarta == 24) return(F("Rei de copas"));
+  if(numcarta == 25) return(F("Rei de espadas"));
+  if(numcarta == 26) return(F("As de copas"));
+  if(numcarta == 27) return(F("As de paus"));
+  if(numcarta == 28) return(F("As de ouros"));
+  if(numcarta == 29) return(F("Dois de ouros")); 
+  if(numcarta == 30) return(F("Dois de paus"));
+  if(numcarta == 31) return(F("Dois de espadas"));
+  if(numcarta == 32) return(F("Dois de copas"));
+  if(numcarta == 33) return(F("Tres de ouros"));
+  if(numcarta == 34) return(F("Tres de espadas"));
+  if(numcarta == 35) return(F("Tres de copas"));
+  if(numcarta == 36) return(F("Tres de paus"));
+  if(numcarta == 37) return(F("Pica fumo"));
+  if(numcarta == 38) return(F("Espadilha"));
+  if(numcarta == 39) return(F("Copeta"));
+  if(numcarta == 40) return(F("Zap"));
   return("erro ao obter nome da carta");
 }
 
@@ -251,7 +251,8 @@ int forca(int numcarta){
   return(-1);
 }
 
-//funcao que espera uma tag nfc ser aproximada do leitor, e volta o valor na posiçao (1,5)
+//funcao que espera uma tag nfc ser aproximada do leitor, e volta o valor na posiçao (1,5) (posição escolhida para ID na tag)
+//também guarda a carta lida para não reler a mesma carta
 int lercarta(){
   	// entrar em idle até aproximar um novo cartao nfc
   while( ! mfrc522.PICC_IsNewCardPresent()) {
@@ -259,23 +260,35 @@ int lercarta(){
 	}
   ReadInfo();
   while(Card[5][0] == 0 || Card[5][0] == j1 || Card[5][0] == j2 || Card[5][0] == j3 || Card[5][0] == carta1 || Card[5][0] == carta2 || Card[5][0] == carta3){
-    Serial.println("Erro de leitura, ou carta já lida! Tentando novamente...");
+    Serial.println(F("Erro na leitura ou carta repetida. Tentando novamente..."));
     ReadInfo();
     delay(100);
   } 
   int valor = Card[5][0];
   ResetInfo();
+
+  switch(maoatual){
+    case 0: Serial.println(F("Setup. Armazenando carta em outra variável..."));
+    break;
+    case 1: j1 = valor;
+    break;
+    case 2: j2 = valor;
+    break;
+    case 3: j3 = valor;
+    break;
+    default: Serial.println(F("Erro na leitura de carta: Mão atual não encontrada"));
+  }
   return valor;
 }
 
 //funcao que recebe uma carta e printa seu numero, forca e nome
 void printarcarta(int carta){
   int f = forca(carta);
-  Serial.print("Seu ID eh: ");
+  Serial.print(F("Seu ID eh: "));
   Serial.println(carta, DEC);
-  Serial.print("Sua força eh: ");
+  Serial.print(F("Sua força eh: "));
   Serial.println(f, DEC);
-  Serial.print("Seu nome eh: ");
+  Serial.print(F("Seu nome eh: "));
   Serial.println(nomear(carta));
 }
 
@@ -294,28 +307,29 @@ void resetarcartas(){
 void inicializarrodada(){
   vez = vez%2 +1;
   resetarcartas();
+  maoatual = 0;
   rodadaatual++;
   pontosemjogo = 1;
   
-  Serial.print("Começando rodada ");
+  Serial.print(F("Começando rodada "));
   Serial.println(rodadaatual, DEC);
-  Serial.print("Pontuacao atual - Jogador ");
+  Serial.print(F("Pontuacao atual - Jogador "));
   Serial.print(pjogador, DEC);
-  Serial.print(" X Robo ");
+  Serial.print(F(" X Robo "));
   Serial.println(probo, DEC);
 
   // ler as 3 cartas do robo
-  Serial.println("Esperando ler a primeira carta do robo...");
+  Serial.println(F("Esperando ler a primeira carta do robo..."));
   carta1 = lercarta();
-  Serial.println("Carta 1 lida!");
+  Serial.println(F("Carta 1 lida!"));
   printarcarta(carta1);
-  Serial.println("Esperando ler a segunda carta do robo...");
+  Serial.println(F("Esperando ler a segunda carta do robo..."));
   carta2 = lercarta();
-  Serial.println("Carta 2 lida!");
+  Serial.println(F("Carta 2 lida!"));
   printarcarta(carta2);
-  Serial.println("Esperando ler a terceira carta do robo...");
+  Serial.println(F("Esperando ler a terceira carta do robo..."));
   carta3 = lercarta();
-  Serial.println("Carta 3 lida!");
+  Serial.println(F("Carta 3 lida!"));
   printarcarta(carta3);
 }
 
@@ -440,7 +454,7 @@ int jogarmenor(){
 //robo joga uma carta (rng, podendo jogar a maior, a maior nao manilha, ou uma aleatoria), e espera uma jogada do usuario. retorna 2 se ganhou, 1 se empatou, 0 se perdeu
 //o parametro escolha pode ser colocado em 0 para nao usar rng nenhum, sempre jogando a maior
 int comecarrobo(int escolha){
-  Serial.println("Robo escolhendo carta...");
+  Serial.println(F("Robo escolhendo carta..."));
   delay(1000);
   randomSeed(analogRead(0));
   int rng = random(0,10);
@@ -459,9 +473,9 @@ int comecarrobo(int escolha){
   }else{
     jogarmaior();
   }
-  Serial.println("Esperando carta do jogador...");
+  Serial.println(F("Esperando carta do jogador..."));
   cartajogador = lercarta();
-  Serial.print("Você jogou: ");
+  Serial.print(F("Você jogou: "));
   Serial.println(nomear(cartajogador));
   if(forca(cartarobo)>forca(cartajogador)) return 2;
   if(forca(cartarobo)==forca(cartajogador)) return 1;
@@ -470,11 +484,11 @@ int comecarrobo(int escolha){
 
 //robo joga a carta mais fraca que ganha se possivel, se nao empata, se nao joga a mais fraca; retorna 2 se ganhou a rodada, 1 se empatou, 0 se perdeu
 int responderrobo(){
-  Serial.println("Esperando carta do jogador...");
+  Serial.println(F("Esperando carta do jogador..."));
   cartajogador = lercarta();
-  Serial.print("Você jogou: ");
+  Serial.print(F("Você jogou: "));
   Serial.println(nomear(cartajogador));
-  Serial.println("Robo escolhendo carta...");
+  Serial.println(F("Robo escolhendo carta..."));
   delay(1000);
   //ver se da pra ganhar, se nao joga a mais fraca
   if(forca(carta1) < forca(cartajogador) && forca(carta2) < forca(cartajogador) && forca(carta3) < forca(cartajogador)){
@@ -514,17 +528,21 @@ void novarodada(){
   //variaveis para os resultados de cada mao. quemempatou eh 2 se robo, 1 se jogador
   int resultadomao1 = -1, resultadomao2 = -1, resultadomao3 = -1, quemempatou1 = -1, quemempatou2 = -1;
 
-  // inicio da mão 1, com o jogador começando
+  // inicio da mão 1
+  maoatual = 1;
   if(vez == 1){
-    Serial.println("Rodada começa pelo JOGADOR.");
+    Serial.println(F("Rodada começa pelo JOGADOR."));
     resultadomao1 = responderrobo();
     if(resultadomao1 == 1) quemempatou1 = 2;
   }else{
-    Serial.println("Rodada começa pelo ROBO.");
+    Serial.println(F("Rodada começa pelo ROBO."));
     delay(4000);
     resultadomao1 = comecarrobo(1);
     if(resultadomao1 == 1) quemempatou1 = 1;
   }
+
+  // inicio da mao 2
+  maoatual = 2;
   if(resultadomao1 == 2){
     resultadomao2 = comecarrobo(1);
     if(resultadomao2 == 1) quemempatou2 = 1;
@@ -540,6 +558,7 @@ void novarodada(){
   if(resultadomao1 == 0){
     resultadomao2 = responderrobo();
   }
+
   //verificar se a rodada já acabou até aqui
   if((resultadomao1 == 2 && resultadomao2 == 2)||(resultadomao1 == 1 && resultadomao2 == 2)||(resultadomao1 == 2 && resultadomao2 == 1)){
     Serial.println("Robo ganha a rodada.");
@@ -551,7 +570,9 @@ void novarodada(){
     pjogador += pontosemjogo;
     return;
   }
-  //se nao acabou, continuar para a mão 3
+
+  //se não acabou, continuar para a mão 3
+  maoatual = 3;
   if(resultadomao2 == 2){
     resultadomao3 = comecarrobo(1);
   }
@@ -564,16 +585,17 @@ void novarodada(){
   if(resultadomao2 == 0){
     resultadomao3 = responderrobo();
   }
+
   //verificar ganhador da rodada
   if((resultadomao1 == 1 && resultadomao2 == 1 && resultadomao3 == 2)||((resultadomao1 == 2 || resultadomao2 == 2) && resultadomao3 == 2)){
-    Serial.println("Robo ganha a rodada.");
+    Serial.println(F("Robo ganha a rodada."));
     probo += pontosemjogo;
     return;
   }else if(resultadomao1 == 1 && resultadomao2 == 1 && resultadomao3 == 1){
-    Serial.println("Três empates seguidos. Isso nunca deveria acontecer. Ninguém ganha.");
+    Serial.println(F("Três empates seguidos. Isso nunca deveria acontecer. Ninguém ganha."));
     return;
   }else{
-    Serial.println("Jogador ganha a rodada.");
+    Serial.println(F("Jogador ganha a rodada."));
     pjogador += pontosemjogo;
     return;
   }
@@ -589,13 +611,13 @@ void novojogo(){
 //verifica o ganhador e printa no serial
 void verificarganhador(){
   if(pjogador>=12){
-    Serial.println("JOGADOR ganhou! Parabéns!");
+    Serial.println(F("JOGADOR ganhou! Parabéns!"));
   }else if(probo>=12){
-    Serial.println("ROBO ganhou! ;)");
+    Serial.println(F("ROBO ganhou! ;)"));
   }else{
-   Serial.println("Erro: ganhador não encontrado.");
+   Serial.println(F("Erro: ganhador não encontrado."));
   }
-  Serial.println("FIM DO JOGO. Iniciando novo jogo em 10 segundos...");
+  Serial.println(F("FIM DO JOGO. Iniciando novo jogo em 10 segundos..."));
   delay(10000);
 }
 
