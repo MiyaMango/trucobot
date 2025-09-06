@@ -15,7 +15,10 @@
  aceitar truco           2
  */
 
+#include <Buzzer.h>
 #include <SPI.h>
+#include <Wire.h>
+#include <LCD-I2C.h>
 #include <Vector.h>
 #include <Servo.h>
 #include <MFRC522.h>
@@ -23,17 +26,19 @@
 #define RST_PIN 3         // configuravel, pwm
 #define SS_PIN 5         // configuravel, pwm
 
-//const int PinTruco = 0, PinFugir = 1, PinAceitar = 2; <- pins para pushbuttons p truco, ñ implementado
-
 MFRC522 mfrc522(SS_PIN, RST_PIN);  // instancia para leitor NFC
 Servo servo1, servo2, servo3; // instancias para os servos
+LCD_I2C lcd(0x27, 16, 2); // instancia para o display lcd
+Buzzer buzzer(2); // instancia para o buzzer 
 
 void setup() {
 	Serial.begin(9600);		// Initialize serial communications with the PC
 	SPI.begin();			// Init SPI bus
-  //pinMode(PinTruco, INPUT);
-  //pinMode(PinFugir, INPUT);
-  //pinMode(PinAceitar, INPUT);
+  Wire.begin();
+  lcd.begin(&Wire);
+  lcd.display();
+  lcd.backlight();
+  buzzer.begin(100);
 	mfrc522.PCD_Init();		// Init MFRC522
 	delay(50);				// delay p inicializaçao do leitor
   servo1.attach(7,500,2500);  // conectar e inicializar todos os servos na posiçao neutra (pins 7,8,9)
@@ -41,10 +46,10 @@ void setup() {
   servo3.attach(9,500,2500);
   servo1.write(15);
   servo2.write(15);
-  servo3.write(15);
+  servo3.write(15); 
   Serial.println("");
 	mfrc522.PCD_DumpVersionToSerial();	//mostrar versao do leitor
-	Serial.println(F("Se a versão do leitor não é 0xB2, resetar o arduino! (Provável mal contato!)"));
+	Serial.println(F("Se a versão do leitor é algo estranho, resetar o arduino! (Provável mal contato!)"));
 }
 
 //declaraçoes de variaveis globais
@@ -52,6 +57,7 @@ byte Card[16][4]; //matriz para armazenar os dados do ultimo NFC lido
 int carta1, carta2, carta3, cartajogador, j1, j2, j3; //variaveis para armazenar as cartas
 int pjogador, probo, pontosemjogo; //variaveis para armazenar os pontos
 int maoatual, rodadaatual, vez = 2; //variaveis relacionadas ao estado de jogo
+int tempo=30; //velocidade que as letras aparecem no display (delay em ms)
 
 //int EstadoTruco = 0, EstadoFugir = 0, EstadoAumentar = 0, EstadoAceitar = 0; <- coisas relacionadas a truco, ñ implementado
 
@@ -251,6 +257,35 @@ int forca(int numcarta){
   return(-1);
 }
 
+//funcao para sons aleatorios no buzzer
+void randomsound(int tempo){
+  randomSeed(analogRead(0));
+  int rng = random(0,4);
+  if(rng==0) buzzer.sound(NOTE_E5, tempo);
+  if(rng==1) buzzer.sound(NOTE_G5, tempo);
+  if(rng==2) buzzer.sound(NOTE_C4, tempo);
+  if(rng==3) buzzer.sound(NOTE_A5, tempo);
+  if(rng==4) buzzer.sound(NOTE_B5, tempo);
+}
+
+//funcao para printar no display lcd. 2 argumentos: primeira linha e segunda linha
+void printarlcd(String linha1, String linha2){
+  lcd.clear();
+  if(linha1.length() > 16 || linha2.length() > 16){
+    Serial.println(F("AVISO! Linha maior que 16 tentando ser printada no LCD! Caracteres serão perdidos!"));
+  }
+  lcd.setCursor(0,0);
+  for(int i=0; i<linha1.length(); i++){
+    lcd.print(linha1[i]);
+    randomsound(tempo);
+  }
+  lcd.setCursor(0,1);
+  for(int i=0; i<linha2.length(); i++){
+    lcd.print(linha2[i]);
+    randomsound(tempo);
+  }
+}
+
 //funcao que espera uma tag nfc ser aproximada do leitor, e volta o valor na posiçao (1,5) (posição escolhida para ID na tag)
 //também guarda a carta lida para não reler a mesma carta
 int lercarta(){
@@ -261,8 +296,11 @@ int lercarta(){
   ReadInfo();
   while(Card[5][0] == 0 || Card[5][0] == j1 || Card[5][0] == j2 || Card[5][0] == j3 || Card[5][0] == carta1 || Card[5][0] == carta2 || Card[5][0] == carta3){
     Serial.println(F("Erro na leitura ou carta repetida. Tentando novamente..."));
-    ReadInfo();
-    delay(100);
+    printarlcd(F("Erro ou carta"), F("repetida!"));
+    while( ! mfrc522.PICC_IsNewCardPresent()) {
+		delay(500);
+	}
+  ReadInfo();
   } 
   int valor = Card[5][0];
   ResetInfo();
@@ -318,19 +356,30 @@ void inicializarrodada(){
   Serial.print(F(" X Robo "));
   Serial.println(probo, DEC);
 
+  printarlcd("Rodada atual: " + String(rodadaatual), "Voce " + String(pjogador) +"x"+ String(probo) + " Robo");
+  delay(2000);
+
   // ler as 3 cartas do robo
   Serial.println(F("Esperando ler a primeira carta do robo..."));
+  printarlcd(F("Esperando carta"), F("#1 do robo..."));
   carta1 = lercarta();
+
   Serial.println(F("Carta 1 lida!"));
+  printarlcd(F("Carta 1 lida!"), F("Ler carta #2"));
   printarcarta(carta1);
   Serial.println(F("Esperando ler a segunda carta do robo..."));
   carta2 = lercarta();
+
   Serial.println(F("Carta 2 lida!"));
+  printarlcd(F("Carta 2 lida!"), F("Ler carta #3"));
   printarcarta(carta2);
   Serial.println(F("Esperando ler a terceira carta do robo..."));
   carta3 = lercarta();
+
   Serial.println(F("Carta 3 lida!"));
+  printarlcd(F("Carta 3 lida!"), F("Comecando rodada"));
   printarcarta(carta3);
+  delay(2000);
 }
 
 //joga a maior carta na mao do robo. volta o id da carta
@@ -455,7 +504,8 @@ int jogarmenor(){
 //o parametro escolha pode ser colocado em 0 para nao usar rng nenhum, sempre jogando a maior
 int comecarrobo(int escolha){
   Serial.println(F("Robo escolhendo carta..."));
-  delay(1000);
+  printarlcd(F("Minha vez."), F("Pensando..."));
+  delay(2000);
   randomSeed(analogRead(0));
   int rng = random(0,10);
   if(escolha == 0) rng = 0;
@@ -474,6 +524,7 @@ int comecarrobo(int escolha){
     jogarmaior();
   }
   Serial.println(F("Esperando carta do jogador..."));
+  printarlcd(F("Sua vez."), F("Esperando..."));
   cartajogador = lercarta();
   Serial.print(F("Você jogou: "));
   Serial.println(nomear(cartajogador));
@@ -485,11 +536,13 @@ int comecarrobo(int escolha){
 //robo joga a carta mais fraca que ganha se possivel, se nao empata, se nao joga a mais fraca; retorna 2 se ganhou a rodada, 1 se empatou, 0 se perdeu
 int responderrobo(){
   Serial.println(F("Esperando carta do jogador..."));
+  printarlcd(F("Sua vez."), F("Esperando..."));
   cartajogador = lercarta();
   Serial.print(F("Você jogou: "));
   Serial.println(nomear(cartajogador));
   Serial.println(F("Robo escolhendo carta..."));
-  delay(1000);
+  printarlcd(F("Minha vez."), F("Pensando..."));
+  delay(2000);
   //ver se da pra ganhar, se nao joga a mais fraca
   if(forca(carta1) < forca(cartajogador) && forca(carta2) < forca(cartajogador) && forca(carta3) < forca(cartajogador)){
     jogarmenor();
@@ -532,11 +585,14 @@ void novarodada(){
   maoatual = 1;
   if(vez == 1){
     Serial.println(F("Rodada começa pelo JOGADOR."));
+    printarlcd(F("Voce comeca"), F("essa rodada."));
+    delay(2000);
     resultadomao1 = responderrobo();
     if(resultadomao1 == 1) quemempatou1 = 2;
   }else{
     Serial.println(F("Rodada começa pelo ROBO."));
-    delay(4000);
+    printarlcd(F("O robo comeca"), F("essa rodada."));
+    delay(2000);
     resultadomao1 = comecarrobo(1);
     if(resultadomao1 == 1) quemempatou1 = 1;
   }
@@ -589,13 +645,19 @@ void novarodada(){
   //verificar ganhador da rodada
   if((resultadomao1 == 1 && resultadomao2 == 1 && resultadomao3 == 2)||((resultadomao1 == 2 || resultadomao2 == 2) && resultadomao3 == 2)){
     Serial.println(F("Robo ganha a rodada."));
+    printarlcd(F("Robo ganhou"), F("essa rodada."));
+    delay(2000);
     probo += pontosemjogo;
     return;
   }else if(resultadomao1 == 1 && resultadomao2 == 1 && resultadomao3 == 1){
     Serial.println(F("Três empates seguidos. Isso nunca deveria acontecer. Ninguém ganha."));
+    printarlcd(F("Tres empates."), F("Sem ganhador."));
+    delay(2000);
     return;
   }else{
     Serial.println(F("Jogador ganha a rodada."));
+    printarlcd(F("Voce ganhou"), F("essa rodada."));
+    delay(2000);
     pjogador += pontosemjogo;
     return;
   }
@@ -606,18 +668,24 @@ void novojogo(){
   pjogador = 0;
   probo = 0;
   rodadaatual = 0;
+  printarlcd(F("Comecando novo"), F("jogo..."));
+  delay(2000);
 }
 
 //verifica o ganhador e printa no serial
 void verificarganhador(){
   if(pjogador>=12){
     Serial.println(F("JOGADOR ganhou! Parabéns!"));
+    printarlcd(F("Voce ganhou!"), F("Parabens!"));
   }else if(probo>=12){
     Serial.println(F("ROBO ganhou! ;)"));
+    printarlcd(F("ROBO ganhou!"), F(";)"));
   }else{
    Serial.println(F("Erro: ganhador não encontrado."));
   }
+  delay(5000);
   Serial.println(F("FIM DO JOGO. Iniciando novo jogo em 10 segundos..."));
+  printarlcd(F("FIM DO JOGO."), F("Novo jogo em 10s"));
   delay(10000);
 }
 
