@@ -10,9 +10,14 @@
  servo2       8
  servo3       9
  --- pinout dos pushbuttons (ñ implementado)---
- pedir ou aumentar truco 0 
- fugir truco             1 
- aceitar truco           2
+ pedir ou aumentar truco x 
+ fugir truco             x 
+ aceitar truco           x
+ --- pinout do buzzer ---
+ buzzer           2
+ --- pinout do display LCD ---
+ SDA             A4
+ SCL             A5
  */
 
 #include <Buzzer.h>
@@ -26,20 +31,21 @@
 #define RST_PIN 3         // configuravel, pwm
 #define SS_PIN 5         // configuravel, pwm
 
+//instancias
 MFRC522 mfrc522(SS_PIN, RST_PIN);  // instancia para leitor NFC
 Servo servo1, servo2, servo3; // instancias para os servos
 LCD_I2C lcd(0x27, 16, 2); // instancia para o display lcd
 Buzzer buzzer(2); // instancia para o buzzer 
 
 void setup() {
-	Serial.begin(9600);		// Initialize serial communications with the PC
-	SPI.begin();			// Init SPI bus
-  Wire.begin();
-  lcd.begin(&Wire);
+	Serial.begin(9600);		// inicializar serial
+	SPI.begin();			// inicializar SPI
+  Wire.begin();      // inicializar wire
+  lcd.begin(&Wire);     //inicializar display
   lcd.display();
   lcd.backlight();
-  buzzer.begin(100);
-	mfrc522.PCD_Init();		// Init MFRC522
+  buzzer.begin(100);      //inicializar buzzer
+	mfrc522.PCD_Init();		//inicializar leitor NFC
 	delay(50);				// delay p inicializaçao do leitor
   servo1.attach(7,500,2500);  // conectar e inicializar todos os servos na posiçao neutra (pins 7,8,9)
   servo2.attach(8,500,2500);
@@ -52,16 +58,526 @@ void setup() {
 	Serial.println(F("Se a versão do leitor é algo estranho, resetar o arduino! (Provável mal contato!)"));
 }
 
-//declaraçoes de variaveis globais
+// variaveis globais
 byte Card[16][4]; //matriz para armazenar os dados do ultimo NFC lido
 int carta1, carta2, carta3, cartajogador, j1, j2, j3; //variaveis para armazenar as cartas
 int pjogador, probo, pontosemjogo; //variaveis para armazenar os pontos
 int maoatual, rodadaatual, vez = 2; //variaveis relacionadas ao estado de jogo
-int tempo=30; //velocidade que as letras aparecem no display (delay em ms)
+int tempo=10, pensamento = 200; //velocidade que as letras aparecem no display (delay em ms), e tempo de pensamento (ms)
 
-//int EstadoTruco = 0, EstadoFugir = 0, EstadoAumentar = 0, EstadoAceitar = 0; <- coisas relacionadas a truco, ñ implementado
+typedef struct{
+  int mao, forca1, forca2;
+}tabela;
 
-// inicializa a matriz com zeros
+//tabela de confianças de cada mao
+const tabela confiancas[503] PROGMEM = {
+{.mao = 0b000010000100001, .forca1 = 0, .forca2 = 0},
+{.mao = 0b000010000100010, .forca1 = 0, .forca2 = 0},
+{.mao = 0b000010000100011, .forca1 = 0, .forca2 = 3},
+{.mao = 0b000010000100100, .forca1 = 0, .forca2 = 5},
+{.mao = 0b000010000100101, .forca1 = 0, .forca2 = 7},
+{.mao = 0b000010000100110, .forca1 = 0, .forca2 = 9},
+{.mao = 0b000010000100111, .forca1 = 0, .forca2 = 11},
+{.mao = 0b000010000101000, .forca1 = 0, .forca2 = 13},
+{.mao = 0b000010000101001, .forca1 = 0, .forca2 = 14},
+{.mao = 0b000010000101010, .forca1 = 0, .forca2 = 16},
+{.mao = 0b000010000101100, .forca1 = 0, .forca2 = 18},
+{.mao = 0b000010000101110, .forca1 = 0, .forca2 = 18},
+{.mao = 0b000010000110000, .forca1 = 0, .forca2 = 19},
+{.mao = 0b000010000110100, .forca1 = 0, .forca2 = 19},
+{.mao = 0b000010001000010, .forca1 = 0, .forca2 = 3},
+{.mao = 0b000010001000011, .forca1 = 1, .forca2 = 5},
+{.mao = 0b000010001000100, .forca1 = 1, .forca2 = 8},
+{.mao = 0b000010001000101, .forca1 = 1, .forca2 = 10},
+{.mao = 0b000010001000110, .forca1 = 1, .forca2 = 12},
+{.mao = 0b000010001000111, .forca1 = 1, .forca2 = 14},
+{.mao = 0b000010001001000, .forca1 = 1, .forca2 = 15},
+{.mao = 0b000010001001001, .forca1 = 1, .forca2 = 17},
+{.mao = 0b000010001001010, .forca1 = 1, .forca2 = 18},
+{.mao = 0b000010001001100, .forca1 = 1, .forca2 = 21},
+{.mao = 0b000010001001110, .forca1 = 1, .forca2 = 21},
+{.mao = 0b000010001010000, .forca1 = 1, .forca2 = 21},
+{.mao = 0b000010001010100, .forca1 = 1, .forca2 = 21},
+{.mao = 0b000010001100011, .forca1 = 2, .forca2 = 6},
+{.mao = 0b000010001100100, .forca1 = 2, .forca2 = 9},
+{.mao = 0b000010001100101, .forca1 = 2, .forca2 = 11},
+{.mao = 0b000010001100110, .forca1 = 2, .forca2 = 13},
+{.mao = 0b000010001100111, .forca1 = 2, .forca2 = 15},
+{.mao = 0b000010001101000, .forca1 = 2, .forca2 = 17},
+{.mao = 0b000010001101001, .forca1 = 2, .forca2 = 19},
+{.mao = 0b000010001101010, .forca1 = 2, .forca2 = 20},
+{.mao = 0b000010001101100, .forca1 = 2, .forca2 = 23},
+{.mao = 0b000010001101110, .forca1 = 2, .forca2 = 24},
+{.mao = 0b000010001110000, .forca1 = 2, .forca2 = 24},
+{.mao = 0b000010001110100, .forca1 = 2, .forca2 = 24},
+{.mao = 0b000010010000100, .forca1 = 2, .forca2 = 10},
+{.mao = 0b000010010000101, .forca1 = 3, .forca2 = 12},
+{.mao = 0b000010010000110, .forca1 = 3, .forca2 = 15},
+{.mao = 0b000010010000111, .forca1 = 3, .forca2 = 17},
+{.mao = 0b000010010001000, .forca1 = 3, .forca2 = 19},
+{.mao = 0b000010010001001, .forca1 = 3, .forca2 = 21},
+{.mao = 0b000010010001010, .forca1 = 3, .forca2 = 23},
+{.mao = 0b000010010001100, .forca1 = 4, .forca2 = 27},
+{.mao = 0b000010010001110, .forca1 = 4, .forca2 = 28},
+{.mao = 0b000010010010000, .forca1 = 4, .forca2 = 29},
+{.mao = 0b000010010010100, .forca1 = 4, .forca2 = 30},
+{.mao = 0b000010010100101, .forca1 = 6, .forca2 = 13},
+{.mao = 0b000010010100110, .forca1 = 7, .forca2 = 17},
+{.mao = 0b000010010100111, .forca1 = 7, .forca2 = 20},
+{.mao = 0b000010010101000, .forca1 = 7, .forca2 = 23},
+{.mao = 0b000010010101001, .forca1 = 7, .forca2 = 25},
+{.mao = 0b000010010101010, .forca1 = 7, .forca2 = 27},
+{.mao = 0b000010010101100, .forca1 = 8, .forca2 = 32},
+{.mao = 0b000010010101110, .forca1 = 8, .forca2 = 34},
+{.mao = 0b000010010110000, .forca1 = 8, .forca2 = 36},
+{.mao = 0b000010010110100, .forca1 = 8, .forca2 = 37},
+{.mao = 0b000010011000110, .forca1 = 11, .forca2 = 18},
+{.mao = 0b000010011000111, .forca1 = 11, .forca2 = 22},
+{.mao = 0b000010011001000, .forca1 = 11, .forca2 = 26},
+{.mao = 0b000010011001001, .forca1 = 11, .forca2 = 29},
+{.mao = 0b000010011001010, .forca1 = 11, .forca2 = 32},
+{.mao = 0b000010011001100, .forca1 = 13, .forca2 = 38},
+{.mao = 0b000010011001110, .forca1 = 13, .forca2 = 41},
+{.mao = 0b000010011010000, .forca1 = 13, .forca2 = 44},
+{.mao = 0b000010011010100, .forca1 = 13, .forca2 = 46},
+{.mao = 0b000010011100111, .forca1 = 16, .forca2 = 23},
+{.mao = 0b000010011101000, .forca1 = 16, .forca2 = 29},
+{.mao = 0b000010011101001, .forca1 = 16, .forca2 = 33},
+{.mao = 0b000010011101010, .forca1 = 16, .forca2 = 38},
+{.mao = 0b000010011101100, .forca1 = 20, .forca2 = 44},
+{.mao = 0b000010011101110, .forca1 = 20, .forca2 = 49},
+{.mao = 0b000010011110000, .forca1 = 20, .forca2 = 52},
+{.mao = 0b000010011110100, .forca1 = 20, .forca2 = 56},
+{.mao = 0b000010100001000, .forca1 = 23, .forca2 = 31},
+{.mao = 0b000010100001001, .forca1 = 23, .forca2 = 37},
+{.mao = 0b000010100001010, .forca1 = 23, .forca2 = 43},
+{.mao = 0b000010100001100, .forca1 = 28, .forca2 = 50},
+{.mao = 0b000010100001110, .forca1 = 28, .forca2 = 56},
+{.mao = 0b000010100010000, .forca1 = 28, .forca2 = 61},
+{.mao = 0b000010100010100, .forca1 = 28, .forca2 = 66},
+{.mao = 0b000010100101001, .forca1 = 32, .forca2 = 39},
+{.mao = 0b000010100101010, .forca1 = 32, .forca2 = 47},
+{.mao = 0b000010100101100, .forca1 = 39, .forca2 = 56},
+{.mao = 0b000010100101110, .forca1 = 39, .forca2 = 63},
+{.mao = 0b000010100110000, .forca1 = 39, .forca2 = 70},
+{.mao = 0b000010100110100, .forca1 = 39, .forca2 = 77},
+{.mao = 0b000010101001010, .forca1 = 43, .forca2 = 49},
+{.mao = 0b000010101001100, .forca1 = 53, .forca2 = 60},
+{.mao = 0b000010101001110, .forca1 = 53, .forca2 = 69},
+{.mao = 0b000010101010000, .forca1 = 53, .forca2 = 78},
+{.mao = 0b000010101010100, .forca1 = 53, .forca2 = 87},
+{.mao = 0b000010110001110, .forca1 = 64, .forca2 = 70},
+{.mao = 0b000010110010000, .forca1 = 64, .forca2 = 84},
+{.mao = 0b000010110010100, .forca1 = 64, .forca2 = 97},
+{.mao = 0b000010111010000, .forca1 = 81, .forca2 = 84},
+{.mao = 0b000010111010100, .forca1 = 81, .forca2 = 100},
+{.mao = 0b000011000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b000100001000010, .forca1 = 3, .forca2 = 3},
+{.mao = 0b000100001000011, .forca1 = 5, .forca2 = 8},
+{.mao = 0b000100001000100, .forca1 = 6, .forca2 = 13},
+{.mao = 0b000100001000101, .forca1 = 6, .forca2 = 17},
+{.mao = 0b000100001000110, .forca1 = 7, .forca2 = 21},
+{.mao = 0b000100001000111, .forca1 = 7, .forca2 = 25},
+{.mao = 0b000100001001000, .forca1 = 8, .forca2 = 28},
+{.mao = 0b000100001001001, .forca1 = 10, .forca2 = 30},
+{.mao = 0b000100001001010, .forca1 = 11, .forca2 = 33},
+{.mao = 0b000100001001100, .forca1 = 15, .forca2 = 38},
+{.mao = 0b000100001001110, .forca1 = 17, .forca2 = 39},
+{.mao = 0b000100001010000, .forca1 = 19, .forca2 = 39},
+{.mao = 0b000100001010100, .forca1 = 21, .forca2 = 39},
+{.mao = 0b000100001100011, .forca1 = 6, .forca2 = 8},
+{.mao = 0b000100001100100, .forca1 = 9, .forca2 = 13},
+{.mao = 0b000100001100101, .forca1 = 9, .forca2 = 17},
+{.mao = 0b000100001100110, .forca1 = 9, .forca2 = 21},
+{.mao = 0b000100001100111, .forca1 = 10, .forca2 = 25},
+{.mao = 0b000100001101000, .forca1 = 11, .forca2 = 28},
+{.mao = 0b000100001101001, .forca1 = 12, .forca2 = 31},
+{.mao = 0b000100001101010, .forca1 = 13, .forca2 = 33},
+{.mao = 0b000100001101100, .forca1 = 16, .forca2 = 38},
+{.mao = 0b000100001101110, .forca1 = 18, .forca2 = 39},
+{.mao = 0b000100001110000, .forca1 = 20, .forca2 = 40},
+{.mao = 0b000100001110100, .forca1 = 22, .forca2 = 40},
+{.mao = 0b000100010000100, .forca1 = 10, .forca2 = 15},
+{.mao = 0b000100010000101, .forca1 = 11, .forca2 = 18},
+{.mao = 0b000100010000110, .forca1 = 12, .forca2 = 22},
+{.mao = 0b000100010000111, .forca1 = 12, .forca2 = 26},
+{.mao = 0b000100010001000, .forca1 = 13, .forca2 = 29},
+{.mao = 0b000100010001001, .forca1 = 13, .forca2 = 32},
+{.mao = 0b000100010001010, .forca1 = 14, .forca2 = 35},
+{.mao = 0b000100010001100, .forca1 = 18, .forca2 = 40},
+{.mao = 0b000100010001110, .forca1 = 20, .forca2 = 42},
+{.mao = 0b000100010010000, .forca1 = 21, .forca2 = 42},
+{.mao = 0b000100010010100, .forca1 = 23, .forca2 = 43},
+{.mao = 0b000100010100101, .forca1 = 14, .forca2 = 18},
+{.mao = 0b000100010100110, .forca1 = 16, .forca2 = 23},
+{.mao = 0b000100010100111, .forca1 = 16, .forca2 = 28},
+{.mao = 0b000100010101000, .forca1 = 16, .forca2 = 31},
+{.mao = 0b000100010101001, .forca1 = 17, .forca2 = 35},
+{.mao = 0b000100010101010, .forca1 = 18, .forca2 = 38},
+{.mao = 0b000100010101100, .forca1 = 21, .forca2 = 44},
+{.mao = 0b000100010101110, .forca1 = 23, .forca2 = 45},
+{.mao = 0b000100010110000, .forca1 = 24, .forca2 = 47},
+{.mao = 0b000100010110100, .forca1 = 26, .forca2 = 47},
+{.mao = 0b000100011000110, .forca1 = 19, .forca2 = 24},
+{.mao = 0b000100011000111, .forca1 = 20, .forca2 = 30},
+{.mao = 0b000100011001000, .forca1 = 21, .forca2 = 34},
+{.mao = 0b000100011001001, .forca1 = 21, .forca2 = 38},
+{.mao = 0b000100011001010, .forca1 = 22, .forca2 = 42},
+{.mao = 0b000100011001100, .forca1 = 26, .forca2 = 48},
+{.mao = 0b000100011001110, .forca1 = 27, .forca2 = 51},
+{.mao = 0b000100011010000, .forca1 = 28, .forca2 = 53},
+{.mao = 0b000100011010100, .forca1 = 29, .forca2 = 54},
+{.mao = 0b000100011100111, .forca1 = 25, .forca2 = 30},
+{.mao = 0b000100011101000, .forca1 = 26, .forca2 = 37},
+{.mao = 0b000100011101001, .forca1 = 26, .forca2 = 41},
+{.mao = 0b000100011101010, .forca1 = 27, .forca2 = 46},
+{.mao = 0b000100011101100, .forca1 = 32, .forca2 = 53},
+{.mao = 0b000100011101110, .forca1 = 32, .forca2 = 57},
+{.mao = 0b000100011110000, .forca1 = 33, .forca2 = 60},
+{.mao = 0b000100011110100, .forca1 = 34, .forca2 = 62},
+{.mao = 0b000100100001000, .forca1 = 31, .forca2 = 39},
+{.mao = 0b000100100001001, .forca1 = 33, .forca2 = 44},
+{.mao = 0b000100100001010, .forca1 = 33, .forca2 = 50},
+{.mao = 0b000100100001100, .forca1 = 39, .forca2 = 58},
+{.mao = 0b000100100001110, .forca1 = 39, .forca2 = 63},
+{.mao = 0b000100100010000, .forca1 = 40, .forca2 = 67},
+{.mao = 0b000100100010100, .forca1 = 41, .forca2 = 71},
+{.mao = 0b000100100101001, .forca1 = 40, .forca2 = 46},
+{.mao = 0b000100100101010, .forca1 = 42, .forca2 = 54},
+{.mao = 0b000100100101100, .forca1 = 48, .forca2 = 63},
+{.mao = 0b000100100101110, .forca1 = 49, .forca2 = 69},
+{.mao = 0b000100100110000, .forca1 = 49, .forca2 = 74},
+{.mao = 0b000100100110100, .forca1 = 50, .forca2 = 80},
+{.mao = 0b000100101001010, .forca1 = 51, .forca2 = 55},
+{.mao = 0b000100101001100, .forca1 = 60, .forca2 = 67},
+{.mao = 0b000100101001110, .forca1 = 60, .forca2 = 74},
+{.mao = 0b000100101010000, .forca1 = 60, .forca2 = 81},
+{.mao = 0b000100101010100, .forca1 = 61, .forca2 = 88},
+{.mao = 0b000100110001110, .forca1 = 71, .forca2 = 76},
+{.mao = 0b000100110010000, .forca1 = 71, .forca2 = 87},
+{.mao = 0b000100110010100, .forca1 = 71, .forca2 = 98},
+{.mao = 0b000100111010000, .forca1 = 84, .forca2 = 87},
+{.mao = 0b000100111010100, .forca1 = 84, .forca2 = 100},
+{.mao = 0b000101000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b000110001100011, .forca1 = 8, .forca2 = 8},
+{.mao = 0b000110001100100, .forca1 = 13, .forca2 = 15},
+{.mao = 0b000110001100101, .forca1 = 13, .forca2 = 22},
+{.mao = 0b000110001100110, .forca1 = 14, .forca2 = 27},
+{.mao = 0b000110001100111, .forca1 = 15, .forca2 = 33},
+{.mao = 0b000110001101000, .forca1 = 17, .forca2 = 38},
+{.mao = 0b000110001101001, .forca1 = 19, .forca2 = 42},
+{.mao = 0b000110001101010, .forca1 = 21, .forca2 = 45},
+{.mao = 0b000110001101100, .forca1 = 28, .forca2 = 52},
+{.mao = 0b000110001101110, .forca1 = 31, .forca2 = 54},
+{.mao = 0b000110001110000, .forca1 = 35, .forca2 = 54},
+{.mao = 0b000110001110100, .forca1 = 39, .forca2 = 54},
+{.mao = 0b000110010000100, .forca1 = 15, .forca2 = 17},
+{.mao = 0b000110010000101, .forca1 = 18, .forca2 = 22},
+{.mao = 0b000110010000110, .forca1 = 18, .forca2 = 28},
+{.mao = 0b000110010000111, .forca1 = 19, .forca2 = 33},
+{.mao = 0b000110010001000, .forca1 = 20, .forca2 = 38},
+{.mao = 0b000110010001001, .forca1 = 22, .forca2 = 42},
+{.mao = 0b000110010001010, .forca1 = 24, .forca2 = 46},
+{.mao = 0b000110010001100, .forca1 = 30, .forca2 = 53},
+{.mao = 0b000110010001110, .forca1 = 33, .forca2 = 55},
+{.mao = 0b000110010010000, .forca1 = 36, .forca2 = 55},
+{.mao = 0b000110010010100, .forca1 = 40, .forca2 = 55},
+{.mao = 0b000110010100101, .forca1 = 19, .forca2 = 22},
+{.mao = 0b000110010100110, .forca1 = 23, .forca2 = 28},
+{.mao = 0b000110010100111, .forca1 = 23, .forca2 = 34},
+{.mao = 0b000110010101000, .forca1 = 24, .forca2 = 39},
+{.mao = 0b000110010101001, .forca1 = 25, .forca2 = 43},
+{.mao = 0b000110010101010, .forca1 = 27, .forca2 = 47},
+{.mao = 0b000110010101100, .forca1 = 33, .forca2 = 54},
+{.mao = 0b000110010101110, .forca1 = 35, .forca2 = 56},
+{.mao = 0b000110010110000, .forca1 = 38, .forca2 = 57},
+{.mao = 0b000110010110100, .forca1 = 41, .forca2 = 57},
+{.mao = 0b000110011000110, .forca1 = 25, .forca2 = 29},
+{.mao = 0b000110011000111, .forca1 = 28, .forca2 = 35},
+{.mao = 0b000110011001000, .forca1 = 29, .forca2 = 41},
+{.mao = 0b000110011001001, .forca1 = 30, .forca2 = 46},
+{.mao = 0b000110011001010, .forca1 = 31, .forca2 = 50},
+{.mao = 0b000110011001100, .forca1 = 37, .forca2 = 57},
+{.mao = 0b000110011001110, .forca1 = 39, .forca2 = 60},
+{.mao = 0b000110011010000, .forca1 = 41, .forca2 = 61},
+{.mao = 0b000110011010100, .forca1 = 44, .forca2 = 62},
+{.mao = 0b000110011100111, .forca1 = 32, .forca2 = 36},
+{.mao = 0b000110011101000, .forca1 = 35, .forca2 = 43},
+{.mao = 0b000110011101001, .forca1 = 35, .forca2 = 48},
+{.mao = 0b000110011101010, .forca1 = 36, .forca2 = 53},
+{.mao = 0b000110011101100, .forca1 = 42, .forca2 = 61},
+{.mao = 0b000110011101110, .forca1 = 43, .forca2 = 64},
+{.mao = 0b000110011110000, .forca1 = 45, .forca2 = 66},
+{.mao = 0b000110011110100, .forca1 = 47, .forca2 = 68},
+{.mao = 0b000110100001000, .forca1 = 39, .forca2 = 45},
+{.mao = 0b000110100001001, .forca1 = 41, .forca2 = 51},
+{.mao = 0b000110100001010, .forca1 = 42, .forca2 = 56},
+{.mao = 0b000110100001100, .forca1 = 48, .forca2 = 65},
+{.mao = 0b000110100001110, .forca1 = 49, .forca2 = 69},
+{.mao = 0b000110100010000, .forca1 = 50, .forca2 = 72},
+{.mao = 0b000110100010100, .forca1 = 52, .forca2 = 75},
+{.mao = 0b000110100101001, .forca1 = 47, .forca2 = 52},
+{.mao = 0b000110100101010, .forca1 = 50, .forca2 = 59},
+{.mao = 0b000110100101100, .forca1 = 56, .forca2 = 69},
+{.mao = 0b000110100101110, .forca1 = 57, .forca2 = 74},
+{.mao = 0b000110100110000, .forca1 = 58, .forca2 = 79},
+{.mao = 0b000110100110100, .forca1 = 59, .forca2 = 82},
+{.mao = 0b000110101001010, .forca1 = 57, .forca2 = 61},
+{.mao = 0b000110101001100, .forca1 = 67, .forca2 = 72},
+{.mao = 0b000110101001110, .forca1 = 67, .forca2 = 79},
+{.mao = 0b000110101010000, .forca1 = 67, .forca2 = 85},
+{.mao = 0b000110101010100, .forca1 = 68, .forca2 = 90},
+{.mao = 0b000110110001110, .forca1 = 76, .forca2 = 81},
+{.mao = 0b000110110010000, .forca1 = 76, .forca2 = 90},
+{.mao = 0b000110110010100, .forca1 = 76, .forca2 = 98},
+{.mao = 0b000110111010000, .forca1 = 87, .forca2 = 90},
+{.mao = 0b000110111010100, .forca1 = 87, .forca2 = 100},
+{.mao = 0b000111000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b001000010000101, .forca1 = 17, .forca2 = 17},
+{.mao = 0b001000010000110, .forca1 = 18, .forca2 = 25},
+{.mao = 0b001000010000111, .forca1 = 20, .forca2 = 32},
+{.mao = 0b001000010001000, .forca1 = 22, .forca2 = 38},
+{.mao = 0b001000010001001, .forca1 = 25, .forca2 = 43},
+{.mao = 0b001000010001010, .forca1 = 29, .forca2 = 47},
+{.mao = 0b001000010001100, .forca1 = 39, .forca2 = 55},
+{.mao = 0b001000010001110, .forca1 = 44, .forca2 = 57},
+{.mao = 0b001000010010000, .forca1 = 51, .forca2 = 58},
+{.mao = 0b001000010010100, .forca1 = 58, .forca2 = 58},
+{.mao = 0b001000010100101, .forca1 = 22, .forca2 = 22},
+{.mao = 0b001000010100110, .forca1 = 28, .forca2 = 30},
+{.mao = 0b001000010100111, .forca1 = 29, .forca2 = 37},
+{.mao = 0b001000010101000, .forca1 = 30, .forca2 = 44},
+{.mao = 0b001000010101001, .forca1 = 32, .forca2 = 50},
+{.mao = 0b001000010101010, .forca1 = 34, .forca2 = 54},
+{.mao = 0b001000010101100, .forca1 = 42, .forca2 = 63},
+{.mao = 0b001000010101110, .forca1 = 46, .forca2 = 65},
+{.mao = 0b001000010110000, .forca1 = 51, .forca2 = 66},
+{.mao = 0b001000010110100, .forca1 = 56, .forca2 = 66},
+{.mao = 0b001000011000110, .forca1 = 30, .forca2 = 30},
+{.mao = 0b001000011000111, .forca1 = 35, .forca2 = 38},
+{.mao = 0b001000011001000, .forca1 = 35, .forca2 = 45},
+{.mao = 0b001000011001001, .forca1 = 37, .forca2 = 51},
+{.mao = 0b001000011001010, .forca1 = 38, .forca2 = 56},
+{.mao = 0b001000011001100, .forca1 = 46, .forca2 = 65},
+{.mao = 0b001000011001110, .forca1 = 49, .forca2 = 67},
+{.mao = 0b001000011010000, .forca1 = 53, .forca2 = 68},
+{.mao = 0b001000011010100, .forca1 = 57, .forca2 = 68},
+{.mao = 0b001000011100111, .forca1 = 37, .forca2 = 39},
+{.mao = 0b001000011101000, .forca1 = 42, .forca2 = 46},
+{.mao = 0b001000011101001, .forca1 = 42, .forca2 = 53},
+{.mao = 0b001000011101010, .forca1 = 43, .forca2 = 58},
+{.mao = 0b001000011101100, .forca1 = 50, .forca2 = 67},
+{.mao = 0b001000011101110, .forca1 = 53, .forca2 = 70},
+{.mao = 0b001000011110000, .forca1 = 56, .forca2 = 72},
+{.mao = 0b001000011110100, .forca1 = 59, .forca2 = 73},
+{.mao = 0b001000100001000, .forca1 = 45, .forca2 = 48},
+{.mao = 0b001000100001001, .forca1 = 48, .forca2 = 55},
+{.mao = 0b001000100001010, .forca1 = 49, .forca2 = 61},
+{.mao = 0b001000100001100, .forca1 = 56, .forca2 = 71},
+{.mao = 0b001000100001110, .forca1 = 57, .forca2 = 74},
+{.mao = 0b001000100010000, .forca1 = 60, .forca2 = 77},
+{.mao = 0b001000100010100, .forca1 = 63, .forca2 = 78},
+{.mao = 0b001000100101001, .forca1 = 53, .forca2 = 56},
+{.mao = 0b001000100101010, .forca1 = 56, .forca2 = 63},
+{.mao = 0b001000100101100, .forca1 = 63, .forca2 = 74},
+{.mao = 0b001000100101110, .forca1 = 64, .forca2 = 78},
+{.mao = 0b001000100110000, .forca1 = 66, .forca2 = 82},
+{.mao = 0b001000100110100, .forca1 = 68, .forca2 = 84},
+{.mao = 0b001000101001010, .forca1 = 62, .forca2 = 65},
+{.mao = 0b001000101001100, .forca1 = 72, .forca2 = 77},
+{.mao = 0b001000101001110, .forca1 = 72, .forca2 = 82},
+{.mao = 0b001000101010000, .forca1 = 73, .forca2 = 87},
+{.mao = 0b001000101010100, .forca1 = 74, .forca2 = 91},
+{.mao = 0b001000110001110, .forca1 = 80, .forca2 = 84},
+{.mao = 0b001000110010000, .forca1 = 80, .forca2 = 92},
+{.mao = 0b001000110010100, .forca1 = 81, .forca2 = 98},
+{.mao = 0b001000111010000, .forca1 = 90, .forca2 = 92},
+{.mao = 0b001000111010100, .forca1 = 90, .forca2 = 100},
+{.mao = 0b001001000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b001010010100101, .forca1 = 24, .forca2 = 24},
+{.mao = 0b001010010100110, .forca1 = 32, .forca2 = 33},
+{.mao = 0b001010010100111, .forca1 = 32, .forca2 = 42},
+{.mao = 0b001010010101000, .forca1 = 34, .forca2 = 50},
+{.mao = 0b001010010101001, .forca1 = 36, .forca2 = 57},
+{.mao = 0b001010010101010, .forca1 = 40, .forca2 = 63},
+{.mao = 0b001010010101100, .forca1 = 50, .forca2 = 73},
+{.mao = 0b001010010101110, .forca1 = 54, .forca2 = 76},
+{.mao = 0b001010010110000, .forca1 = 60, .forca2 = 77},
+{.mao = 0b001010010110100, .forca1 = 67, .forca2 = 77},
+{.mao = 0b001010011000110, .forca1 = 33, .forca2 = 34},
+{.mao = 0b001010011000111, .forca1 = 40, .forca2 = 43},
+{.mao = 0b001010011001000, .forca1 = 40, .forca2 = 51},
+{.mao = 0b001010011001001, .forca1 = 42, .forca2 = 58},
+{.mao = 0b001010011001010, .forca1 = 44, .forca2 = 64},
+{.mao = 0b001010011001100, .forca1 = 53, .forca2 = 73},
+{.mao = 0b001010011001110, .forca1 = 57, .forca2 = 76},
+{.mao = 0b001010011010000, .forca1 = 62, .forca2 = 77},
+{.mao = 0b001010011010100, .forca1 = 68, .forca2 = 77},
+{.mao = 0b001010011100111, .forca1 = 41, .forca2 = 43},
+{.mao = 0b001010011101000, .forca1 = 47, .forca2 = 52},
+{.mao = 0b001010011101001, .forca1 = 48, .forca2 = 59},
+{.mao = 0b001010011101010, .forca1 = 50, .forca2 = 65},
+{.mao = 0b001010011101100, .forca1 = 58, .forca2 = 75},
+{.mao = 0b001010011101110, .forca1 = 60, .forca2 = 78},
+{.mao = 0b001010011110000, .forca1 = 64, .forca2 = 79},
+{.mao = 0b001010011110100, .forca1 = 69, .forca2 = 79},
+{.mao = 0b001010100001000, .forca1 = 50, .forca2 = 53},
+{.mao = 0b001010100001001, .forca1 = 55, .forca2 = 60},
+{.mao = 0b001010100001010, .forca1 = 55, .forca2 = 67},
+{.mao = 0b001010100001100, .forca1 = 63, .forca2 = 77},
+{.mao = 0b001010100001110, .forca1 = 65, .forca2 = 80},
+{.mao = 0b001010100010000, .forca1 = 68, .forca2 = 82},
+{.mao = 0b001010100010100, .forca1 = 71, .forca2 = 83},
+{.mao = 0b001010100101001, .forca1 = 58, .forca2 = 61},
+{.mao = 0b001010100101010, .forca1 = 62, .forca2 = 69},
+{.mao = 0b001010100101100, .forca1 = 69, .forca2 = 80},
+{.mao = 0b001010100101110, .forca1 = 70, .forca2 = 83},
+{.mao = 0b001010100110000, .forca1 = 72, .forca2 = 86},
+{.mao = 0b001010100110100, .forca1 = 75, .forca2 = 87},
+{.mao = 0b001010101001010, .forca1 = 67, .forca2 = 70},
+{.mao = 0b001010101001100, .forca1 = 77, .forca2 = 82},
+{.mao = 0b001010101001110, .forca1 = 77, .forca2 = 87},
+{.mao = 0b001010101010000, .forca1 = 78, .forca2 = 90},
+{.mao = 0b001010101010100, .forca1 = 80, .forca2 = 93},
+{.mao = 0b001010110001110, .forca1 = 85, .forca2 = 88},
+{.mao = 0b001010110010000, .forca1 = 85, .forca2 = 94},
+{.mao = 0b001010110010100, .forca1 = 86, .forca2 = 99},
+{.mao = 0b001010111010000, .forca1 = 92, .forca2 = 94},
+{.mao = 0b001010111010100, .forca1 = 92, .forca2 = 100},
+{.mao = 0b001011000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b001100011000110, .forca1 = 35, .forca2 = 35},
+{.mao = 0b001100011000111, .forca1 = 43, .forca2 = 44},
+{.mao = 0b001100011001000, .forca1 = 44, .forca2 = 54},
+{.mao = 0b001100011001001, .forca1 = 46, .forca2 = 62},
+{.mao = 0b001100011001010, .forca1 = 49, .forca2 = 69},
+{.mao = 0b001100011001100, .forca1 = 59, .forca2 = 80},
+{.mao = 0b001100011001110, .forca1 = 64, .forca2 = 83},
+{.mao = 0b001100011010000, .forca1 = 70, .forca2 = 85},
+{.mao = 0b001100011010100, .forca1 = 77, .forca2 = 85},
+{.mao = 0b001100011100111, .forca1 = 44, .forca2 = 44},
+{.mao = 0b001100011101000, .forca1 = 51, .forca2 = 54},
+{.mao = 0b001100011101001, .forca1 = 52, .forca2 = 62},
+{.mao = 0b001100011101010, .forca1 = 54, .forca2 = 70},
+{.mao = 0b001100011101100, .forca1 = 63, .forca2 = 81},
+{.mao = 0b001100011101110, .forca1 = 67, .forca2 = 84},
+{.mao = 0b001100011110000, .forca1 = 72, .forca2 = 85},
+{.mao = 0b001100011110100, .forca1 = 78, .forca2 = 85},
+{.mao = 0b001100100001000, .forca1 = 53, .forca2 = 56},
+{.mao = 0b001100100001001, .forca1 = 59, .forca2 = 63},
+{.mao = 0b001100100001010, .forca1 = 60, .forca2 = 71},
+{.mao = 0b001100100001100, .forca1 = 68, .forca2 = 82},
+{.mao = 0b001100100001110, .forca1 = 71, .forca2 = 85},
+{.mao = 0b001100100010000, .forca1 = 74, .forca2 = 87},
+{.mao = 0b001100100010100, .forca1 = 79, .forca2 = 87},
+{.mao = 0b001100100101001, .forca1 = 62, .forca2 = 64},
+{.mao = 0b001100100101010, .forca1 = 67, .forca2 = 72},
+{.mao = 0b001100100101100, .forca1 = 74, .forca2 = 84},
+{.mao = 0b001100100101110, .forca1 = 76, .forca2 = 87},
+{.mao = 0b001100100110000, .forca1 = 78, .forca2 = 89},
+{.mao = 0b001100100110100, .forca1 = 82, .forca2 = 90},
+{.mao = 0b001100101001010, .forca1 = 71, .forca2 = 73},
+{.mao = 0b001100101001100, .forca1 = 82, .forca2 = 85},
+{.mao = 0b001100101001110, .forca1 = 82, .forca2 = 90},
+{.mao = 0b001100101010000, .forca1 = 83, .forca2 = 93},
+{.mao = 0b001100101010100, .forca1 = 85, .forca2 = 94},
+{.mao = 0b001100110001110, .forca1 = 88, .forca2 = 91},
+{.mao = 0b001100110010000, .forca1 = 88, .forca2 = 96},
+{.mao = 0b001100110010100, .forca1 = 90, .forca2 = 99},
+{.mao = 0b001100111010000, .forca1 = 94, .forca2 = 96},
+{.mao = 0b001100111010100, .forca1 = 94, .forca2 = 100},
+{.mao = 0b001101000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b001110011100111, .forca1 = 46, .forca2 = 46},
+{.mao = 0b001110011101000, .forca1 = 54, .forca2 = 55},
+{.mao = 0b001110011101001, .forca1 = 55, .forca2 = 65},
+{.mao = 0b001110011101010, .forca1 = 58, .forca2 = 74},
+{.mao = 0b001110011101100, .forca1 = 68, .forca2 = 86},
+{.mao = 0b001110011101110, .forca1 = 72, .forca2 = 89},
+{.mao = 0b001110011110000, .forca1 = 78, .forca2 = 91},
+{.mao = 0b001110011110100, .forca1 = 85, .forca2 = 91},
+{.mao = 0b001110100001000, .forca1 = 56, .forca2 = 57},
+{.mao = 0b001110100001001, .forca1 = 63, .forca2 = 65},
+{.mao = 0b001110100001010, .forca1 = 64, .forca2 = 74},
+{.mao = 0b001110100001100, .forca1 = 73, .forca2 = 86},
+{.mao = 0b001110100001110, .forca1 = 76, .forca2 = 89},
+{.mao = 0b001110100010000, .forca1 = 80, .forca2 = 91},
+{.mao = 0b001110100010100, .forca1 = 86, .forca2 = 91},
+{.mao = 0b001110100101001, .forca1 = 65, .forca2 = 66},
+{.mao = 0b001110100101010, .forca1 = 71, .forca2 = 75},
+{.mao = 0b001110100101100, .forca1 = 79, .forca2 = 87},
+{.mao = 0b001110100101110, .forca1 = 80, .forca2 = 91},
+{.mao = 0b001110100110000, .forca1 = 83, .forca2 = 93},
+{.mao = 0b001110100110100, .forca1 = 87, .forca2 = 93},
+{.mao = 0b001110101001010, .forca1 = 75, .forca2 = 75},
+{.mao = 0b001110101001100, .forca1 = 85, .forca2 = 88},
+{.mao = 0b001110101001110, .forca1 = 85, .forca2 = 92},
+{.mao = 0b001110101010000, .forca1 = 87, .forca2 = 95},
+{.mao = 0b001110101010100, .forca1 = 90, .forca2 = 95},
+{.mao = 0b001110110001110, .forca1 = 91, .forca2 = 94},
+{.mao = 0b001110110010000, .forca1 = 91, .forca2 = 97},
+{.mao = 0b001110110010100, .forca1 = 93, .forca2 = 99},
+{.mao = 0b001110111010000, .forca1 = 96, .forca2 = 97},
+{.mao = 0b001110111010100, .forca1 = 96, .forca2 = 100},
+{.mao = 0b001111000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b010000100001000, .forca1 = 62, .forca2 = 62},
+{.mao = 0b010000100001001, .forca1 = 66, .forca2 = 66},
+{.mao = 0b010000100001010, .forca1 = 67, .forca2 = 75},
+{.mao = 0b010000100001100, .forca1 = 76, .forca2 = 89},
+{.mao = 0b010000100001110, .forca1 = 80, .forca2 = 93},
+{.mao = 0b010000100010000, .forca1 = 85, .forca2 = 95},
+{.mao = 0b010000100010100, .forca1 = 92, .forca2 = 95},
+{.mao = 0b010000100101001, .forca1 = 67, .forca2 = 67},
+{.mao = 0b010000100101010, .forca1 = 74, .forca2 = 76},
+{.mao = 0b010000100101100, .forca1 = 82, .forca2 = 90},
+{.mao = 0b010000100101110, .forca1 = 83, .forca2 = 93},
+{.mao = 0b010000100110000, .forca1 = 87, .forca2 = 95},
+{.mao = 0b010000100110100, .forca1 = 92, .forca2 = 95},
+{.mao = 0b010000101001010, .forca1 = 77, .forca2 = 77},
+{.mao = 0b010000101001100, .forca1 = 88, .forca2 = 90},
+{.mao = 0b010000101001110, .forca1 = 88, .forca2 = 94},
+{.mao = 0b010000101010000, .forca1 = 90, .forca2 = 97},
+{.mao = 0b010000101010100, .forca1 = 93, .forca2 = 97},
+{.mao = 0b010000110001110, .forca1 = 93, .forca2 = 95},
+{.mao = 0b010000110010000, .forca1 = 93, .forca2 = 99},
+{.mao = 0b010000110010100, .forca1 = 96, .forca2 = 99},
+{.mao = 0b010000111010000, .forca1 = 97, .forca2 = 99},
+{.mao = 0b010000111010100, .forca1 = 97, .forca2 = 100},
+{.mao = 0b010001000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b010010100101001, .forca1 = 69, .forca2 = 69},
+{.mao = 0b010010100101010, .forca1 = 76, .forca2 = 77},
+{.mao = 0b010010100101100, .forca1 = 84, .forca2 = 92},
+{.mao = 0b010010100101110, .forca1 = 86, .forca2 = 96},
+{.mao = 0b010010100110000, .forca1 = 90, .forca2 = 98},
+{.mao = 0b010010100110100, .forca1 = 95, .forca2 = 98},
+{.mao = 0b010010101001010, .forca1 = 78, .forca2 = 77},
+{.mao = 0b010010101001100, .forca1 = 90, .forca2 = 92},
+{.mao = 0b010010101001110, .forca1 = 90, .forca2 = 96},
+{.mao = 0b010010101010000, .forca1 = 92, .forca2 = 98},
+{.mao = 0b010010101010100, .forca1 = 96, .forca2 = 98},
+{.mao = 0b010010110001110, .forca1 = 95, .forca2 = 96},
+{.mao = 0b010010110010000, .forca1 = 95, .forca2 = 99},
+{.mao = 0b010010110010100, .forca1 = 98, .forca2 = 100},
+{.mao = 0b010010111010000, .forca1 = 99, .forca2 = 99},
+{.mao = 0b010010111010100, .forca1 = 99, .forca2 = 100},
+{.mao = 0b010011000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b010100101001010, .forca1 = 80, .forca2 = 80},
+{.mao = 0b010100101001100, .forca1 = 92, .forca2 = 93},
+{.mao = 0b010100101001110, .forca1 = 92, .forca2 = 97},
+{.mao = 0b010100101010000, .forca1 = 94, .forca2 = 100},
+{.mao = 0b010100101010100, .forca1 = 98, .forca2 = 100},
+{.mao = 0b010100110001110, .forca1 = 96, .forca2 = 97},
+{.mao = 0b010100110010000, .forca1 = 96, .forca2 = 100},
+{.mao = 0b010100110010100, .forca1 = 99, .forca2 = 100},
+{.mao = 0b010100111010000, .forca1 = 99, .forca2 = 100},
+{.mao = 0b010100111010100, .forca1 = 99, .forca2 = 100},
+{.mao = 0b010101000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b011000111010000, .forca1 = 100, .forca2 = 100},
+{.mao = 0b011000111010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b011001000010100, .forca1 = 100, .forca2 = 100},
+{.mao = 0b011101000010100, .forca1 = 100, .forca2 = 100}
+};
+
+
+// inicializa a matriz de leitura NFC com zeros
 void ResetInfo(){
 	for (int i=0; i<=15; i++){
 		for (int j=0; j<=4; j++){
@@ -112,7 +628,7 @@ void ReadInfo(){
   mfrc522.PICC_HaltA();
 }
 
-// mostra os dados armazenados na matriz
+// mostra os dados armazenados na matriz (debug)
 /*
 void ShowInfo(){
 
@@ -130,7 +646,7 @@ void ShowInfo(){
 }
 */
 
-//mexe servo n e tira cartan da mao do robo. retorna o id da carta jogada
+//mexe servo n e tira carta n da mao do robo. retorna o id da carta jogada
 int jogar(int n){
   int idjogada = -1;
   if(n == 1){
@@ -253,7 +769,7 @@ int forca(int numcarta){
   if(numcarta == 37) return(12); // pica fumo
   if(numcarta == 38) return(14); // espadilha
   if(numcarta == 39) return(16); // copas
-  if(numcarta == 40) return(18); // zap
+  if(numcarta == 40) return(20); // zap
   return(-1);
 }
 
@@ -306,7 +822,7 @@ int lercarta(){
   ResetInfo();
 
   switch(maoatual){
-    case 0: Serial.println(F("Setup. Armazenando carta em outra variável..."));
+    case 0: Serial.println(F("Lembrando da carta..."));
     break;
     case 1: j1 = valor;
     break;
@@ -328,6 +844,42 @@ void printarcarta(int carta){
   Serial.println(f, DEC);
   Serial.print(F("Seu nome eh: "));
   Serial.println(nomear(carta));
+}
+
+//encodar uma mao pro formato da tabela
+int encode(Vector<int> mao){
+  int maoencoded = (mao[0] << 10 | mao[1] << 5 | mao[2]) && 0x7FFF;
+  return maoencoded;
+}
+
+//puxar o nivel de confianca da tabela
+int calcularconfianca(){
+  int storage_array[3];
+  Vector<int> ordenado(storage_array);
+  ordenado.push_back(carta1);
+  ordenado.push_back(carta2);
+  ordenado.push_back(carta3);
+
+  //bubble sort para ordenar cartas por força
+  for(int i=0; i<3; i++){
+    for(int j=0; j<3-i; j++){
+      if(forca(ordenado[j]) > forca(ordenado[j+1])){
+        int aux = ordenado[j];
+        ordenado[j]=ordenado[j+1];
+        ordenado[j+1]=aux;
+      }
+    }
+  }
+  int codigo = encode(ordenado);
+  Serial.println("O código da mão é:" + String(codigo));
+
+  for(int i=0;i<503;i++){
+    if(codigo == confiancas[i].mao){
+      if(vez == 1) return confiancas[i].forca2;
+      if(vez == 2) return confiancas[i].forca1;
+    }
+  }
+
 }
 
 // reseta as cartas para começar nova rodada
@@ -357,7 +909,7 @@ void inicializarrodada(){
   Serial.println(probo, DEC);
 
   printarlcd("Rodada atual: " + String(rodadaatual), "Voce " + String(pjogador) +"x"+ String(probo) + " Robo");
-  delay(2000);
+  delay(pensamento);
 
   // ler as 3 cartas do robo
   Serial.println(F("Esperando ler a primeira carta do robo..."));
@@ -379,7 +931,10 @@ void inicializarrodada(){
   Serial.println(F("Carta 3 lida!"));
   printarlcd(F("Carta 3 lida!"), F("Comecando rodada"));
   printarcarta(carta3);
-  delay(2000);
+
+  int confianca = calcularconfianca();
+  Serial.println("A confianca nessa mao é:" + String(confianca));
+  delay(pensamento);
 }
 
 //joga a maior carta na mao do robo. volta o id da carta
@@ -505,7 +1060,7 @@ int jogarmenor(){
 int comecarrobo(int escolha){
   Serial.println(F("Robo escolhendo carta..."));
   printarlcd(F("Minha vez."), F("Pensando..."));
-  delay(2000);
+  delay(pensamento);
   randomSeed(analogRead(0));
   int rng = random(0,10);
   if(escolha == 0) rng = 0;
@@ -542,7 +1097,7 @@ int responderrobo(){
   Serial.println(nomear(cartajogador));
   Serial.println(F("Robo escolhendo carta..."));
   printarlcd(F("Minha vez."), F("Pensando..."));
-  delay(2000);
+  delay(pensamento);
   //ver se da pra ganhar, se nao joga a mais fraca
   if(forca(carta1) < forca(cartajogador) && forca(carta2) < forca(cartajogador) && forca(carta3) < forca(cartajogador)){
     jogarmenor();
@@ -586,13 +1141,13 @@ void novarodada(){
   if(vez == 1){
     Serial.println(F("Rodada começa pelo JOGADOR."));
     printarlcd(F("Voce comeca"), F("essa rodada."));
-    delay(2000);
+    delay(pensamento);
     resultadomao1 = responderrobo();
     if(resultadomao1 == 1) quemempatou1 = 2;
   }else{
     Serial.println(F("Rodada começa pelo ROBO."));
     printarlcd(F("O robo comeca"), F("essa rodada."));
-    delay(2000);
+    delay(pensamento);
     resultadomao1 = comecarrobo(1);
     if(resultadomao1 == 1) quemempatou1 = 1;
   }
@@ -646,18 +1201,18 @@ void novarodada(){
   if((resultadomao1 == 1 && resultadomao2 == 1 && resultadomao3 == 2)||((resultadomao1 == 2 || resultadomao2 == 2) && resultadomao3 == 2)){
     Serial.println(F("Robo ganha a rodada."));
     printarlcd(F("Robo ganhou"), F("essa rodada."));
-    delay(2000);
+    delay(pensamento);
     probo += pontosemjogo;
     return;
   }else if(resultadomao1 == 1 && resultadomao2 == 1 && resultadomao3 == 1){
     Serial.println(F("Três empates seguidos. Isso nunca deveria acontecer. Ninguém ganha."));
     printarlcd(F("Tres empates."), F("Sem ganhador."));
-    delay(2000);
+    delay(pensamento);
     return;
   }else{
     Serial.println(F("Jogador ganha a rodada."));
     printarlcd(F("Voce ganhou"), F("essa rodada."));
-    delay(2000);
+    delay(pensamento);
     pjogador += pontosemjogo;
     return;
   }
@@ -669,7 +1224,7 @@ void novojogo(){
   probo = 0;
   rodadaatual = 0;
   printarlcd(F("Comecando novo"), F("jogo..."));
-  delay(2000);
+  delay(pensamento);
 }
 
 //verifica o ganhador e printa no serial
