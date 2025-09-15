@@ -63,7 +63,8 @@ byte Card[16][4]; //matriz para armazenar os dados do ultimo NFC lido
 int carta1, carta2, carta3, cartajogador, j1, j2, j3; //variaveis para armazenar as cartas
 int pjogador, probo, pontosemjogo; //variaveis para armazenar os pontos
 int maoatual, rodadaatual, vez = 2; //variaveis relacionadas ao estado de jogo
-int tempo=10, pensamento = 200; //velocidade que as letras aparecem no display (delay em ms), e tempo de pensamento (ms)
+int quemchamou, confianca; //variaveis relacionadas ao truco
+int tempo=30, pensamento = 2000; //velocidade que as letras aparecem no display (delay em ms), e tempo de pensamento (ms)
 
 typedef struct{
   int mao, forca1, forca2;
@@ -848,7 +849,7 @@ void printarcarta(int carta){
 
 //encodar uma mao pro formato da tabela
 int encode(Vector<int> mao){
-  int maoencoded = (mao[0] << 10 | mao[1] << 5 | mao[2]) && 0x7FFF;
+  int maoencoded = ((mao[0] << 10) + (mao[1] << 5) + mao[2]);
   return maoencoded;
 }
 
@@ -880,9 +881,95 @@ int calcularconfianca(){
     }
   }
 
+  return -1;
 }
 
-// reseta as cartas para começar nova rodada
+//funçao que decide se o robo vai aceitar, fugir ou retrucar um truco. -1 fugir, 0 aceitar, 1 retrucar
+int pensartrucorobo(){
+  if(confianca < 20) return -1;
+  if(confianca < 70) return 0;
+  return 1;
+}
+
+//funçao que espera uma jogada do jogador, que pode ser uma funçao relacionada a truco, ou uma jogada normal. -1 fugir, 0 jogar normal, 1 truco
+int esperarjogador(){
+  /*
+  todo: esperar qualquer uma das 3 seguintes entradas:
+  se botãofugir for apertado, retornar -1
+  se uma carta chegar perto do leitor, retornar 0
+  se botãotrucar for apertado, retornar 1
+
+  questão: como esperar por algum desses 3 tipos de input diferentes, quando não se sabe qual vai vir?
+  */
+}
+
+//funçao para o truco. parametro indica quem esta chamando. retorna 0 se o truco nao foi valido, ou 1 se foi
+int truco(int p){
+  if(p == quemchamou || pontosemjogo == 12) return 0;
+  quemchamou = p;
+
+  if(quemchamou == 1){
+    Serial.print(F("JOGADOR pede "));
+    switch(pontosemjogo){
+      case 1: Serial.println(F("truco!"));
+      break;
+      case 3: Serial.println(F("SEIS!"));
+      break;
+      case 6: Serial.println(F("NOVE!"));
+      break;
+      case 9: Serial.println(F("DOZE!"));
+      break;
+    }
+    switch(pensartrucorobo()){
+      case -1: pjogador += pontosemjogo;
+      Serial.print(F("Robo foge. Jogador ganhou "));
+      Serial.print(String(pontosemjogo));
+      Serial.println(F(" pontos."));
+      novarodada();
+      break;
+      case 0: if(pontosemjogo == 1) pontosemjogo = 1;
+      else pontosemjogo = pontosemjogo +3;
+      Serial.print(F("Robo aceita. A partida agora vale "));
+      Serial.print(String(pontosemjogo));
+      Serial.println(F(" pontos."));
+      break;
+      case 1: truco(2);
+      break;
+    }
+  }
+  if(quemchamou == 2){
+    Serial.print(F("ROBO pede "));
+    switch(pontosemjogo){
+      case 1: Serial.println(F("truco!"));
+      break;
+      case 3: Serial.println(F("SEIS!"));
+      break;
+      case 6: Serial.println(F("NOVE!"));
+      break;
+      case 9: Serial.println(F("DOZE!"));
+      break;
+    }
+    switch(esperarjogador()){
+      case -1: probo += pontosemjogo;
+      Serial.print(F("Jogador foge. Robo ganhou "));
+      Serial.print(String(pontosemjogo));
+      Serial.println(F(" pontos."));
+      novarodada();
+      break;
+      case 0: if(pontosemjogo == 1) pontosemjogo = 1;
+      else pontosemjogo = pontosemjogo +3;
+      Serial.print(F("Jogador aceita. A partida agora vale "));
+      Serial.print(String(pontosemjogo));
+      Serial.println(F(" pontos."));
+      break;
+      case 1: truco(1);
+      break;
+    }
+  }
+  return 1;
+}
+
+//reseta as cartas para começar nova rodada
 void resetarcartas(){
   carta1 = 0;
   carta2 = 0;
@@ -893,13 +980,14 @@ void resetarcartas(){
   j3 = 0;
 }
 
-// troca a vez, reseta as cartas, incrementa a rodada, reseta pontos em jogo e le as 3 cartas do robo
+//troca a vez, reseta as cartas, incrementa a rodada, reseta pontos em jogo e le as 3 cartas do robo
 void inicializarrodada(){
   vez = vez%2 +1;
   resetarcartas();
   maoatual = 0;
   rodadaatual++;
   pontosemjogo = 1;
+  quemchamou = 0;
   
   Serial.print(F("Começando rodada "));
   Serial.println(rodadaatual, DEC);
@@ -932,7 +1020,7 @@ void inicializarrodada(){
   printarlcd(F("Carta 3 lida!"), F("Comecando rodada"));
   printarcarta(carta3);
 
-  int confianca = calcularconfianca();
+  confianca = calcularconfianca();
   Serial.println("A confianca nessa mao é:" + String(confianca));
   delay(pensamento);
 }
@@ -1061,6 +1149,7 @@ int comecarrobo(int escolha){
   Serial.println(F("Robo escolhendo carta..."));
   printarlcd(F("Minha vez."), F("Pensando..."));
   delay(pensamento);
+  if(pensartrucorobo() == 1) truco(2);
   randomSeed(analogRead(0));
   int rng = random(0,10);
   if(escolha == 0) rng = 0;
@@ -1098,6 +1187,7 @@ int responderrobo(){
   Serial.println(F("Robo escolhendo carta..."));
   printarlcd(F("Minha vez."), F("Pensando..."));
   delay(pensamento);
+  if(pensartrucorobo() == 1) truco(2);
   //ver se da pra ganhar, se nao joga a mais fraca
   if(forca(carta1) < forca(cartajogador) && forca(carta2) < forca(cartajogador) && forca(carta3) < forca(cartajogador)){
     jogarmenor();
