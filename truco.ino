@@ -9,10 +9,9 @@
  servo1       7
  servo2       8
  servo3       9
- --- pinout dos pushbuttons (ñ implementado)---
- pedir ou aumentar truco x 
- fugir truco             x 
- aceitar truco           x
+ --- pinout dos pushbuttons ---
+ pedir ou aumentar truco 0
+ fugir truco             4
  --- pinout do buzzer ---
  buzzer           2
  --- pinout do display LCD ---
@@ -40,6 +39,8 @@ Buzzer buzzer(2); // instancia para o buzzer
 void setup() {
 	Serial.begin(9600);		// inicializar serial
 	SPI.begin();			// inicializar SPI
+  pinMode(0, INPUT_PULLUP);
+  pinMode(4, INPUT_PULLUP);
   Wire.begin();      // inicializar wire
   lcd.begin(&Wire);     //inicializar display
   lcd.display();
@@ -62,16 +63,18 @@ void setup() {
 byte Card[16][4]; //matriz para armazenar os dados do ultimo NFC lido
 int carta1, carta2, carta3, cartajogador, j1, j2, j3; //variaveis para armazenar as cartas
 int pjogador, probo, pontosemjogo; //variaveis para armazenar os pontos
-int maoatual, rodadaatual, vez = 2; //variaveis relacionadas ao estado de jogo
+int maoatual, rodadaatual, vez = 2, quemfugiu; //variaveis relacionadas ao estado de jogo
 int quemchamou, confianca; //variaveis relacionadas ao truco
-int tempo=30, pensamento = 2000; //velocidade que as letras aparecem no display (delay em ms), e tempo de pensamento (ms)
+int state_b1 = 0, state_b2 = 0, last_state_b1 = 0, last_state_b2 = 0; //variaveis p/ pushbuttons
+int tempo=25, pensamento = 1500; //velocidade que as letras aparecem no display (delay em ms), e tempo de pensamento (ms)
 
 typedef struct{
-  int mao, forca1, forca2;
+  int mao;
+  char forca1, forca2;
 }tabela;
 
 //tabela de confianças de cada mao
-const tabela confiancas[503] PROGMEM = {
+const tabela confiancas[] PROGMEM = {
 {.mao = 0b000010000100001, .forca1 = 0, .forca2 = 0},
 {.mao = 0b000010000100010, .forca1 = 0, .forca2 = 0},
 {.mao = 0b000010000100011, .forca1 = 0, .forca2 = 3},
@@ -776,7 +779,7 @@ int forca(int numcarta){
 
 //funcao para sons aleatorios no buzzer
 void randomsound(int tempo){
-  randomSeed(analogRead(0));
+  randomSeed(analogRead(A0));
   int rng = random(0,4);
   if(rng==0) buzzer.sound(NOTE_E5, tempo);
   if(rng==1) buzzer.sound(NOTE_G5, tempo);
@@ -803,6 +806,27 @@ void printarlcd(String linha1, String linha2){
   }
 }
 
+//checa se um botao está atualmente sendo apertado
+bool check(int num){
+  switch(num){
+    case 1: 
+    state_b1 = digitalRead(4);
+    if(state_b1 != last_state_b1){
+      if(state_b1 == LOW) return true;
+    }
+    last_state_b1 = state_b1;
+    break;
+    
+    case 2: state_b2 = digitalRead(0);
+    if(state_b2 != last_state_b2){
+      if(state_b2 == LOW) return true;
+    }
+    last_state_b2 = state_b2;
+    break;
+  }
+  return false;
+}
+
 //funcao que espera uma tag nfc ser aproximada do leitor, e volta o valor na posiçao (1,5) (posição escolhida para ID na tag)
 //também guarda a carta lida para não reler a mesma carta
 int lercarta(){
@@ -823,15 +847,18 @@ int lercarta(){
   ResetInfo();
 
   switch(maoatual){
-    case 0: Serial.println(F("Lembrando da carta..."));
+    case 0: 
+    Serial.println(F("Lembrando da carta..."));
     break;
+    
     case 1: j1 = valor;
     break;
+    
     case 2: j2 = valor;
     break;
+    
     case 3: j3 = valor;
     break;
-    default: Serial.println(F("Erro na leitura de carta: Mão atual não encontrada"));
   }
   return valor;
 }
@@ -848,8 +875,8 @@ void printarcarta(int carta){
 }
 
 //encodar uma mao pro formato da tabela
-int encode(Vector<int> mao){
-  int maoencoded = ((mao[0] << 10) + (mao[1] << 5) + mao[2]);
+unsigned encode(Vector<int> mao){
+  unsigned maoencoded = ((forca(mao[0]) << 10) + (forca(mao[1]) << 5) + forca(mao[2]));
   return maoencoded;
 }
 
@@ -862,8 +889,8 @@ int calcularconfianca(){
   ordenado.push_back(carta3);
 
   //bubble sort para ordenar cartas por força
-  for(int i=0; i<3; i++){
-    for(int j=0; j<3-i; j++){
+  for(int i=0; i<2; i++){
+    for(int j=0; j<2-i; j++){
       if(forca(ordenado[j]) > forca(ordenado[j+1])){
         int aux = ordenado[j];
         ordenado[j]=ordenado[j+1];
@@ -871,101 +898,180 @@ int calcularconfianca(){
       }
     }
   }
+
   int codigo = encode(ordenado);
-  Serial.println("O código da mão é:" + String(codigo));
+  //Serial.println("O código da mão é:" + String(codigo));
 
   for(int i=0;i<503;i++){
-    if(codigo == confiancas[i].mao){
-      if(vez == 1) return confiancas[i].forca2;
-      if(vez == 2) return confiancas[i].forca1;
+    //Serial.println("Procurando indice " + String(i) + " que eh: " + String(pgm_read_word(&confiancas[i].mao)));
+    int temp = pgm_read_word(&confiancas[i].mao);
+    if(codigo == temp){
+      //Serial.println("Encontrado no indice " + String(i));
+      if(vez == 1) return pgm_read_byte(&confiancas[i].forca2);
+      if(vez == 2) return pgm_read_byte(&confiancas[i].forca1);
     }
   }
 
   return -1;
 }
 
-//funçao que decide se o robo vai aceitar, fugir ou retrucar um truco. -1 fugir, 0 aceitar, 1 retrucar
+//funçao que decide se o robo vai aceitar, fugir ou pedir um/retrucar um truco. -1 fugir, 0 aceitar, 1 pedir truco/retrucar
 int pensartrucorobo(){
-  if(confianca < 20) return -1;
-  if(confianca < 70) return 0;
-  return 1;
+  if(confianca > 90) return 1;
+
+  randomSeed(analogRead(A0));
+  int rng = random(0,100);
+
+  switch(pontosemjogo){
+    case 1:
+    if(rng < confianca) return 1;
+    break;
+
+    case 3:
+    if(rng < confianca/2) return 1;
+    if(rng < confianca) return 0;
+    break;
+
+    case 6:
+    if(rng < confianca/3) return 1;
+    if(rng < confianca) return 0;
+    break;
+
+    case 9:
+    if(rng < confianca/4) return 1;
+    if(rng < confianca) return 0;
+    break;
+
+    case 12:
+    if(rng < confianca) return 0;
+    break;
+  }
+
+  return -1;
 }
 
 //funçao que espera uma jogada do jogador, que pode ser uma funçao relacionada a truco, ou uma jogada normal. -1 fugir, 0 jogar normal, 1 truco
 int esperarjogador(){
-  /*
-  todo: esperar qualquer uma das 3 seguintes entradas:
-  se botãofugir for apertado, retornar -1
-  se uma carta chegar perto do leitor, retornar 0
-  se botãotrucar for apertado, retornar 1
-
-  questão: como esperar por algum desses 3 tipos de input diferentes, quando não se sabe qual vai vir?
-  */
+  Serial.println("Esperando escolha do jogador...");
+  while(1){
+    if(check(1)) return -1;
+    if(mfrc522.PICC_IsNewCardPresent()) return 0;
+    if(check(2)) return 1;
+    delay(25);
+  }
 }
 
-//funçao para o truco. parametro indica quem esta chamando. retorna 0 se o truco nao foi valido, ou 1 se foi
+//funçao para o truco. parametro indica quem esta chamando. retorna 0 se o truco nao foi valido, ou 1 se foi, ou -1 se fugiu.
+//parametro p: 1 se jogador chamou truco, 2 se robo chamou truco
 int truco(int p){
-  if(p == quemchamou || pontosemjogo == 12) return 0;
+  if(p == 2 && (quemchamou == 2 || probo + pontosemjogo > 12 || pjogador + pontosemjogo > 12)|| quemfugiu != 0) return 0;
+  if(p == 1 && (quemchamou == 1 || probo + pontosemjogo > 12 || pjogador + pontosemjogo > 12)){
+    printarlcd(F("Truco"), F("invalido."));
+    delay(1000);
+    return 0;
+  }
   quemchamou = p;
 
-  if(quemchamou == 1){
+  if(p == 1){
+    printarlcd(F("Voce trucou!"), F(""));
+    delay(1000);
     Serial.print(F("JOGADOR pede "));
     switch(pontosemjogo){
       case 1: Serial.println(F("truco!"));
       break;
+
       case 3: Serial.println(F("SEIS!"));
       break;
+
       case 6: Serial.println(F("NOVE!"));
       break;
+
       case 9: Serial.println(F("DOZE!"));
       break;
     }
     switch(pensartrucorobo()){
-      case -1: pjogador += pontosemjogo;
+      case -1:
       Serial.print(F("Robo foge. Jogador ganhou "));
       Serial.print(String(pontosemjogo));
       Serial.println(F(" pontos."));
-      novarodada();
+      printarlcd(F("Eu fujo!"), "");
+      delay(pensamento);
+      quemfugiu = 2;
+      return 1;
       break;
-      case 0: if(pontosemjogo == 1) pontosemjogo = 1;
+
+      case 0: 
+      if(pontosemjogo == 1) pontosemjogo = 3;
       else pontosemjogo = pontosemjogo +3;
       Serial.print(F("Robo aceita. A partida agora vale "));
       Serial.print(String(pontosemjogo));
       Serial.println(F(" pontos."));
+      printarlcd(F("Eu aceito!"), ("Agora vale "+ String(pontosemjogo)));
+      delay(pensamento);
       break;
-      case 1: truco(2);
+
+      case 1: 
+      if(pontosemjogo == 1) pontosemjogo = 3;
+      else pontosemjogo = pontosemjogo +3;
+      truco(2);
+      return 1;
       break;
     }
   }
-  if(quemchamou == 2){
+  if(p == 2){
     Serial.print(F("ROBO pede "));
     switch(pontosemjogo){
-      case 1: Serial.println(F("truco!"));
+      case 1: 
+      Serial.println(F("Truco!"));
+      printarlcd(F("TRUCO!"), F("Aceita?"));
       break;
-      case 3: Serial.println(F("SEIS!"));
+
+      case 3: 
+      Serial.println(F("SEIS!"));
+      printarlcd(F("SEIS!!"), F("Aceita?"));
       break;
-      case 6: Serial.println(F("NOVE!"));
+
+      case 6: 
+      Serial.println(F("NOVE!"));
+      printarlcd(F("NOVE!!"), F("Aceita?"));
       break;
-      case 9: Serial.println(F("DOZE!"));
+
+      case 9: 
+      Serial.println(F("DOZE!"));
+      printarlcd(F("TUDO!!"), F("Aceita?"));
       break;
     }
     switch(esperarjogador()){
-      case -1: probo += pontosemjogo;
+      case -1: 
       Serial.print(F("Jogador foge. Robo ganhou "));
       Serial.print(String(pontosemjogo));
       Serial.println(F(" pontos."));
-      novarodada();
+      printarlcd(F("Voce fugiu."), "");
+      delay(pensamento);
+      quemfugiu = 1;
+      return 1;
       break;
-      case 0: if(pontosemjogo == 1) pontosemjogo = 1;
+
+      case 0: 
+      if(pontosemjogo == 1) pontosemjogo = 3;
       else pontosemjogo = pontosemjogo +3;
       Serial.print(F("Jogador aceita. A partida agora vale "));
+      printarlcd(F("Voce aceitou"), "Vale " + String(pontosemjogo) + " pts.");
       Serial.print(String(pontosemjogo));
       Serial.println(F(" pontos."));
+      delay(1500);
+      printarlcd(F("Continuando."), F(""));
       break;
-      case 1: truco(1);
+
+      case 1: 
+      if(pontosemjogo == 1) pontosemjogo = 3;
+      else pontosemjogo = pontosemjogo +3;
+      truco(1);
+      return 1;
       break;
     }
   }
+  delay(1500);
   return 1;
 }
 
@@ -988,6 +1094,7 @@ void inicializarrodada(){
   rodadaatual++;
   pontosemjogo = 1;
   quemchamou = 0;
+  quemfugiu = 0;
   
   Serial.print(F("Começando rodada "));
   Serial.println(rodadaatual, DEC);
@@ -1150,7 +1257,8 @@ int comecarrobo(int escolha){
   printarlcd(F("Minha vez."), F("Pensando..."));
   delay(pensamento);
   if(pensartrucorobo() == 1) truco(2);
-  randomSeed(analogRead(0));
+  if(quemfugiu != 0) return;
+  randomSeed(analogRead(A0));
   int rng = random(0,10);
   if(escolha == 0) rng = 0;
   int cartarobo = -1;
@@ -1167,8 +1275,9 @@ int comecarrobo(int escolha){
   }else{
     jogarmaior();
   }
-  Serial.println(F("Esperando carta do jogador..."));
   printarlcd(F("Sua vez."), F("Esperando..."));
+  if(esperarjogador() == 1) truco(1);
+  if(quemfugiu != 0) return -1;
   cartajogador = lercarta();
   Serial.print(F("Você jogou: "));
   Serial.println(nomear(cartajogador));
@@ -1179,8 +1288,9 @@ int comecarrobo(int escolha){
 
 //robo joga a carta mais fraca que ganha se possivel, se nao empata, se nao joga a mais fraca; retorna 2 se ganhou a rodada, 1 se empatou, 0 se perdeu
 int responderrobo(){
-  Serial.println(F("Esperando carta do jogador..."));
   printarlcd(F("Sua vez."), F("Esperando..."));
+  if(esperarjogador() == 1) truco(1);
+  if(quemfugiu != 0) return -1;
   cartajogador = lercarta();
   Serial.print(F("Você jogou: "));
   Serial.println(nomear(cartajogador));
@@ -1242,6 +1352,20 @@ void novarodada(){
     if(resultadomao1 == 1) quemempatou1 = 1;
   }
 
+  if(quemfugiu == 1){
+    Serial.println("Robo ganha a rodada.");
+    printarlcd(F("Eu ganhei"), F("essa rodada."));
+    delay(pensamento);
+    probo += pontosemjogo;
+    return;
+  }
+  if(quemfugiu == 2){
+    Serial.println("Jogador ganha a rodada.");
+    printarlcd(F("Voce ganhou"), F("essa rodada."));
+    delay(pensamento);
+    pjogador += pontosemjogo;
+    return;
+  }
   // inicio da mao 2
   maoatual = 2;
   if(resultadomao1 == 2){
@@ -1261,13 +1385,17 @@ void novarodada(){
   }
 
   //verificar se a rodada já acabou até aqui
-  if((resultadomao1 == 2 && resultadomao2 == 2)||(resultadomao1 == 1 && resultadomao2 == 2)||(resultadomao1 == 2 && resultadomao2 == 1)){
+  if((resultadomao1 == 2 && resultadomao2 == 2)||(resultadomao1 == 1 && resultadomao2 == 2)||(resultadomao1 == 2 && resultadomao2 == 1)||(quemfugiu == 1)){
     Serial.println("Robo ganha a rodada.");
+    printarlcd(F("Eu ganhei"), F("essa rodada."));
+    delay(pensamento);
     probo += pontosemjogo;
     return;
   }
-  if((resultadomao1 == 0 && resultadomao2 == 0)||(resultadomao1 == 1 && resultadomao2 == 0)||(resultadomao1 == 0 && resultadomao2 == 1)){
+  if((resultadomao1 == 0 && resultadomao2 == 0)||(resultadomao1 == 1 && resultadomao2 == 0)||(resultadomao1 == 0 && resultadomao2 == 1)||(quemfugiu == 2)){
     Serial.println("Jogador ganha a rodada.");
+    printarlcd(F("Voce ganhou"), F("essa rodada."));
+    delay(pensamento);
     pjogador += pontosemjogo;
     return;
   }
@@ -1288,9 +1416,9 @@ void novarodada(){
   }
 
   //verificar ganhador da rodada
-  if((resultadomao1 == 1 && resultadomao2 == 1 && resultadomao3 == 2)||((resultadomao1 == 2 || resultadomao2 == 2) && resultadomao3 == 2)){
+  if((resultadomao1 == 1 && resultadomao2 == 1 && resultadomao3 == 2)||((resultadomao1 == 2 || resultadomao2 == 2) && resultadomao3 == 2)||(quemfugiu == 1)){
     Serial.println(F("Robo ganha a rodada."));
-    printarlcd(F("Robo ganhou"), F("essa rodada."));
+    printarlcd(F("Eu ganhei"), F("essa rodada."));
     delay(pensamento);
     probo += pontosemjogo;
     return;
