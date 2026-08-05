@@ -3,14 +3,15 @@ This project was initially developed in my first semester as a student in the Un
 
 The goal of this project is to construct a physical robot that can play a game of [Truco](https://en.wikipedia.org/wiki/Truco), a card game popular in Brazil. For simplicity, the two-version player of the game was chosen, and the "Truco mineiro" variety was chosen for implementation. 
 
-**todo: trucobox picture**
+<img width="1524" height="845" alt="trucobotitself" src="https://github.com/user-attachments/assets/2b110f50-1c80-407e-9d7b-6ee0d5168cc1" />
+
 
 ## Implementation
 *This project was made when i was first learning to program, and as such is very dirty mixture of C and C++. I will be making a cleaner version soon, and a historical version will be archived.*
 
 The project implements a basic finite state machine to handle the game logic. The game state is stored in a series of global variables. Each playing card has a unique ID stored in its NFC sticker tag, which allows the robot to interact physically with the player through its servo-motors.  
 
-When it is the player's turn, the game will wait for an input from the player, which can be playing a card (by physically approaching one of the NFC tags to the NFC reader), or pressing one of the 2 push buttons, each corresponding to an in-game action (truco/raise or fold). Invalid actions will be ignored.
+When it is the player's turn, the game will wait for an input from the player, which can be playing a card (by physically approaching one of the NFC tags to the NFC reader), or pressing one of the 3 push buttons, each corresponding to an in-game action (truco/raise or fold). Invalid actions will be ignored.
 
 When it is the robot's turn, the robot will make an appropriate choice for the current game state, being able to play one of its own cards (by physically flipping over the card placed on top of the servo), or communicating the intent to raise or fold to the player through the LCD screen. 
 
@@ -41,16 +42,16 @@ If you want to recreate this project yourself, here is a list of components used
 | Passive Buzzer   | 1 |
 | 16x2 LCD Display | 1 |
 | I2C Adapter      | 1 |
-| Push Button      | 2 |
+| Push Button      | 3 |
 | RC522 NFC Reader | 1 |
 | 5V Power supply  | 1 |
 | Mifare Ultralight C stickers | 40 |
 
 You'll also need a shoebox or similar for the body, something to put the NFC stickers on (preferably a deck of cards), and basic craft materials, such as hot glue and a box cutter. The initial version of this project was built using a breadboard and standard jumpers, and while this is possible, this construction is very fragile, and the arduino will shut down and lose the game state if you bump on the box too hard. I am currently working on making a version built on a home-printed PCB to solve this problem.
 
-The circuit is built as follows:
+The circuit diagram is as follows:
 
-**todo: tinkercad schematic**
+<img width="1265" height="871" alt="Schematic_truco_2026-08-05(1)" src="https://github.com/user-attachments/assets/45953e1b-8108-4d8b-9ba6-06996dfa02fa" />
 
 ## TO-DO LIST
 The current goal of this project is to improve on the initial version, and make the construction of the robot a reproducible activity for educational purposes. As such, the planned features revolve around cleaning up existing code, and providing tutorials and tools for reproducing the project.
