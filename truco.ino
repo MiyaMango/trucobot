@@ -1,19 +1,21 @@
 /*
  --- pinout do leitor nfc ---
- RST          3 / qualquer PWM, configurar
- SDA(SS)      5 / qualquer PWM, configurar
+ RST          7 / qualquer data, configurar
+ SDA(SS)      10 / qualquer PWM, configurar
  MOSI         11
  MISO         12 
  SCK          13
  --- pinout dos servos ---
- servo1       7
- servo2       8
- servo3       9
+ servo1       3
+ servo2       4
+ servo3       5
+ servo4       x (nao implementado)
  --- pinout dos pushbuttons ---
  pedir ou aumentar truco 0
- fugir truco             4
+ fugir truco             1
+ aceitar truco           2
  --- pinout do buzzer ---
- buzzer           2
+ buzzer           6
  --- pinout do display LCD ---
  SDA             A4
  SCL             A5
@@ -27,33 +29,37 @@
 #include <Servo.h>
 #include <MFRC522.h>
 
-#define RST_PIN 3         // configuravel, pwm
-#define SS_PIN 5         // configuravel, pwm
+#define RST_PIN 7         // configuravel, pwm
+#define SS_PIN 10         // configuravel, pwm
 
 //instancias
 MFRC522 mfrc522(SS_PIN, RST_PIN);  // instancia para leitor NFC
-Servo servo1, servo2, servo3; // instancias para os servos
+Servo servo1, servo2, servo3, servo4; // instancias para os servos
 LCD_I2C lcd(0x27, 16, 2); // instancia para o display lcd
-Buzzer buzzer(2); // instancia para o buzzer 
+Buzzer buzzer(6); // instancia para o buzzer 
 
 void setup() {
 	Serial.begin(9600);		// inicializar serial
 	SPI.begin();			// inicializar SPI
   pinMode(0, INPUT_PULLUP);
-  pinMode(4, INPUT_PULLUP);
+  pinMode(1, INPUT_PULLUP);
+  pinMode(2, INPUT_PULLUP);
   Wire.begin();      // inicializar wire
   lcd.begin(&Wire);     //inicializar display
   lcd.display();
   lcd.backlight();
   buzzer.begin(100);      //inicializar buzzer
 	mfrc522.PCD_Init();		//inicializar leitor NFC
-	delay(50);				// delay p inicializaçao do leitor
-  servo1.attach(7,500,2500);  // conectar e inicializar todos os servos na posiçao neutra (pins 7,8,9)
-  servo2.attach(8,500,2500);
-  servo3.attach(9,500,2500);
+	delay(200);				// delay p inicializaçao do leitor
+  servo1.attach(3,500,2500);  // conectar e inicializar todos os servos na posiçao neutra 
+  servo2.attach(4,500,2500);
+  servo3.attach(5,500,2500);
+  //servo4.attach(8,500,2500);
   servo1.write(15);
   servo2.write(15);
   servo3.write(15); 
+  servo4.write(0);
+  randomSeed(analogRead(A0));
   Serial.println("");
 	mfrc522.PCD_DumpVersionToSerial();	//mostrar versao do leitor
 	Serial.println(F("Se a versão do leitor é algo estranho, resetar o arduino! (Provável mal contato!)"));
@@ -64,8 +70,8 @@ byte Card[16][4]; //matriz para armazenar os dados do ultimo NFC lido
 int carta1, carta2, carta3, cartajogador, j1, j2, j3; //variaveis para armazenar as cartas
 int pjogador, probo, pontosemjogo; //variaveis para armazenar os pontos
 int maoatual, rodadaatual, vez = 2, quemfugiu; //variaveis relacionadas ao estado de jogo
-int quemchamou, confianca; //variaveis relacionadas ao truco
-int state_b1 = 0, state_b2 = 0, last_state_b1 = 0, last_state_b2 = 0; //variaveis p/ pushbuttons
+int quemchamou, confianca, trucostate = 0; //variaveis relacionadas ao truco
+int state_b1 = 0, state_b2 = 0, last_state_b1 = 0, last_state_b2 = 0, state_b3 = 0, last_state_b3 = 0; //variaveis p/ pushbuttons
 int tempo=25, pensamento = 1500; //velocidade que as letras aparecem no display (delay em ms), e tempo de pensamento (ms)
 
 typedef struct{
@@ -690,102 +696,101 @@ int jogar(int n){
 //funcao hardcoded que recebe o numero de uma carta e retorna uma string com seu nome
 String nomear(int numcarta){
   if(numcarta == 1) return(F("Quatro de ouros"));
-  if(numcarta == 2) return(F("Quatro de espadas"));
-  if(numcarta == 3) return(F("Quatro de copas"));
-  if(numcarta == 4) return(F("Cinco de copas"));
-  if(numcarta == 5) return(F("Cinco de espadas"));
-  if(numcarta == 6) return(F("Cinco de ouros"));
-  if(numcarta == 7) return(F("Cinco de paus"));
-  if(numcarta == 8) return(F("Seis de copas"));
-  if(numcarta == 9) return(F("Seis de ouros"));
-  if(numcarta == 10) return(F("Seis de paus"));
-  if(numcarta == 11) return(F("Seis de espadas"));
-  if(numcarta == 12) return(F("Sete de espadas"));
-  if(numcarta == 13) return(F("Sete de paus"));
-  if(numcarta == 14) return(F("Rainha de paus"));
-  if(numcarta == 15) return(F("Rainha de ouros"));
-  if(numcarta == 16) return(F("Rainha de espadas"));
-  if(numcarta == 17) return(F("Rainha de copas"));
-  if(numcarta == 18) return(F("Valete de espadas"));
-  if(numcarta == 19) return(F("Valete de paus"));
-  if(numcarta == 20) return(F("Valete de copas"));
-  if(numcarta == 21) return(F("Valete de ouros"));
-  if(numcarta == 22) return(F("Rei de ouros"));
-  if(numcarta == 23) return(F("Rei de paus"));
-  if(numcarta == 24) return(F("Rei de copas"));
-  if(numcarta == 25) return(F("Rei de espadas"));
-  if(numcarta == 26) return(F("As de copas"));
-  if(numcarta == 27) return(F("As de paus"));
-  if(numcarta == 28) return(F("As de ouros"));
-  if(numcarta == 29) return(F("Dois de ouros")); 
-  if(numcarta == 30) return(F("Dois de paus"));
-  if(numcarta == 31) return(F("Dois de espadas"));
-  if(numcarta == 32) return(F("Dois de copas"));
-  if(numcarta == 33) return(F("Tres de ouros"));
-  if(numcarta == 34) return(F("Tres de espadas"));
-  if(numcarta == 35) return(F("Tres de copas"));
-  if(numcarta == 36) return(F("Tres de paus"));
-  if(numcarta == 37) return(F("Pica fumo"));
-  if(numcarta == 38) return(F("Espadilha"));
-  if(numcarta == 39) return(F("Copeta"));
-  if(numcarta == 40) return(F("Zap"));
-  return("erro ao obter nome da carta");
+  else if(numcarta == 2) return(F("Quatro de espadas"));
+  else if(numcarta == 3) return(F("Quatro de copas"));
+  else if(numcarta == 4) return(F("Cinco de copas"));
+  else if(numcarta == 5) return(F("Cinco de espadas"));
+  else if(numcarta == 6) return(F("Cinco de ouros"));
+  else if(numcarta == 7) return(F("Cinco de paus"));
+  else if(numcarta == 8) return(F("Seis de copas"));
+  else if(numcarta == 9) return(F("Seis de ouros"));
+  else if(numcarta == 10) return(F("Seis de paus"));
+  else if(numcarta == 11) return(F("Seis de espadas"));
+  else if(numcarta == 12) return(F("Sete de espadas"));
+  else if(numcarta == 13) return(F("Sete de paus"));
+  else if(numcarta == 14) return(F("Rainha de paus"));
+  else if(numcarta == 15) return(F("Rainha de ouros"));
+  else if(numcarta == 16) return(F("Rainha de espadas"));
+  else if(numcarta == 17) return(F("Rainha de copas"));
+  else if(numcarta == 18) return(F("Valete de espadas"));
+  else if(numcarta == 19) return(F("Valete de paus"));
+  else if(numcarta == 20) return(F("Valete de copas"));
+  else if(numcarta == 21) return(F("Valete de ouros"));
+  else if(numcarta == 22) return(F("Rei de ouros"));
+  else if(numcarta == 23) return(F("Rei de paus"));
+  else if(numcarta == 24) return(F("Rei de copas"));
+  else if(numcarta == 25) return(F("Rei de espadas"));
+  else if(numcarta == 26) return(F("As de copas"));
+  else if(numcarta == 27) return(F("As de paus"));
+  else if(numcarta == 28) return(F("As de ouros"));
+  else if(numcarta == 29) return(F("Dois de ouros")); 
+  else if(numcarta == 30) return(F("Dois de paus"));
+  else if(numcarta == 31) return(F("Dois de espadas"));
+  else if(numcarta == 32) return(F("Dois de copas"));
+  else if(numcarta == 33) return(F("Tres de ouros"));
+  else if(numcarta == 34) return(F("Tres de espadas"));
+  else if(numcarta == 35) return(F("Tres de copas"));
+  else if(numcarta == 36) return(F("Tres de paus"));
+  else if(numcarta == 37) return(F("Pica fumo"));
+  else if(numcarta == 38) return(F("Espadilha"));
+  else if(numcarta == 39) return(F("Copeta"));
+  else if(numcarta == 40) return(F("Zap"));
+  else return("erro ao obter nome da carta");
 }
 
 //funcao hardcoded que recebe o numero de uma carta e retorna o valor de sua força no truco mineiro
 int forca(int numcarta){
   if(numcarta == 1) return(1); // quatro de ouros
-  if(numcarta == 2) return(1); // quatro de espadas
-  if(numcarta == 3) return(1); // quatro de copas
-  if(numcarta == 4) return(2); // cinco de copas
-  if(numcarta == 5) return(2); // cinco de espadas
-  if(numcarta == 6) return(2); // cinco de ouros
-  if(numcarta == 7) return(2); // cinco de paus 
-  if(numcarta == 8) return(3); // seis de copas 
-  if(numcarta == 9) return(3); // seis de ouros
-  if(numcarta == 10) return(3); // seis de paus
-  if(numcarta == 11) return(3); // seis de espadas
-  if(numcarta == 12) return(4); // sete de espadas
-  if(numcarta == 13) return(4); // sete de copas
-  if(numcarta == 14) return(5); // rainha de paus
-  if(numcarta == 15) return(5); // rainha de ouros
-  if(numcarta == 16) return(5); // rainha de espadas
-  if(numcarta == 17) return(5); // rainha de copas
-  if(numcarta == 18) return(6); // valete de espadas
-  if(numcarta == 19) return(6); // valete de paus
-  if(numcarta == 20) return(6); // valete de copas
-  if(numcarta == 21) return(6); // valete de ouros
-  if(numcarta == 22) return(7); // rei de ouros
-  if(numcarta == 23) return(7); // rei de paus
-  if(numcarta == 24) return(7); // rei de copas
-  if(numcarta == 25) return(7); // rei de espadas
-  if(numcarta == 26) return(8); // as de copas
-  if(numcarta == 27) return(8); // as de paus
-  if(numcarta == 28) return(8); // as de ouros
-  if(numcarta == 29) return(9); // dois de ouros 
-  if(numcarta == 30) return(9); // dois de paus
-  if(numcarta == 31) return(9); // dois de espadas
-  if(numcarta == 32) return(9); // dois de copas
-  if(numcarta == 33) return(10); // tres de ouros
-  if(numcarta == 34) return(10); // tres de espadas
-  if(numcarta == 35) return(10); // tres de copas
-  if(numcarta == 36) return(10); // tres de paus
-  if(numcarta == 37) return(12); // pica fumo
-  if(numcarta == 38) return(14); // espadilha
-  if(numcarta == 39) return(16); // copas
-  if(numcarta == 40) return(20); // zap
-  return(-1);
+  else if(numcarta == 2) return(1); // quatro de espadas
+  else if(numcarta == 3) return(1); // quatro de copas
+  else if(numcarta == 4) return(2); // cinco de copas
+  else if(numcarta == 5) return(2); // cinco de espadas
+  else if(numcarta == 6) return(2); // cinco de ouros
+  else if(numcarta == 7) return(2); // cinco de paus 
+  else if(numcarta == 8) return(3); // seis de copas 
+  else if(numcarta == 9) return(3); // seis de ouros
+  else if(numcarta == 10) return(3); // seis de paus
+  else if(numcarta == 11) return(3); // seis de espadas
+  else if(numcarta == 12) return(4); // sete de espadas
+  else if(numcarta == 13) return(4); // sete de copas
+  else if(numcarta == 14) return(5); // rainha de paus
+  else if(numcarta == 15) return(5); // rainha de ouros
+  else if(numcarta == 16) return(5); // rainha de espadas
+  else if(numcarta == 17) return(5); // rainha de copas
+  else if(numcarta == 18) return(6); // valete de espadas
+  else if(numcarta == 19) return(6); // valete de paus
+  else if(numcarta == 20) return(6); // valete de copas
+  else if(numcarta == 21) return(6); // valete de ouros
+  else if(numcarta == 22) return(7); // rei de ouros
+  else if(numcarta == 23) return(7); // rei de paus
+  else if(numcarta == 24) return(7); // rei de copas
+  else if(numcarta == 25) return(7); // rei de espadas
+  else if(numcarta == 26) return(8); // as de copas
+  else if(numcarta == 27) return(8); // as de paus
+  else if(numcarta == 28) return(8); // as de ouros
+  else if(numcarta == 29) return(9); // dois de ouros 
+  else if(numcarta == 30) return(9); // dois de paus
+  else if(numcarta == 31) return(9); // dois de espadas
+  else if(numcarta == 32) return(9); // dois de copas
+  else if(numcarta == 33) return(10); // tres de ouros
+  else if(numcarta == 34) return(10); // tres de espadas
+  else if(numcarta == 35) return(10); // tres de copas
+  else if(numcarta == 36) return(10); // tres de paus
+  else if(numcarta == 37) return(12); // pica fumo
+  else if(numcarta == 38) return(14); // espadilha
+  else if(numcarta == 39) return(16); // copas
+  else if(numcarta == 40) return(20); // zap
+  else return(-1);
 }
 
 //funcao para sons aleatorios no buzzer
 void randomsound(int tempo){
-  randomSeed(analogRead(A0));
   int rng = random(0,4);
   if(rng==0) buzzer.sound(NOTE_E5, tempo);
-  if(rng==1) buzzer.sound(NOTE_G5, tempo);
-  if(rng==2) buzzer.sound(NOTE_C4, tempo);
-  if(rng==3) buzzer.sound(NOTE_A5, tempo);
-  if(rng==4) buzzer.sound(NOTE_B5, tempo);
+  else if(rng==1) buzzer.sound(NOTE_G5, tempo);
+  else if(rng==2) buzzer.sound(NOTE_C4, tempo);
+  else if(rng==3) buzzer.sound(NOTE_A5, tempo);
+  else if(rng==4) buzzer.sound(NOTE_B5, tempo);
 }
 
 //funcao para printar no display lcd. 2 argumentos: primeira linha e segunda linha
@@ -817,11 +822,18 @@ bool check(int num){
     last_state_b1 = state_b1;
     break;
     
-    case 2: state_b2 = digitalRead(0);
+    case 2: state_b2 = digitalRead(6);
     if(state_b2 != last_state_b2){
       if(state_b2 == LOW) return true;
     }
     last_state_b2 = state_b2;
+    break;
+
+    case 3: state_b3 = digitalRead(0);
+    if(state_b3 != last_state_b3){
+      if(state_b3 == LOW) return true;
+    }
+    last_state_b3 = state_b3;
     break;
   }
   return false;
@@ -837,7 +849,7 @@ int lercarta(){
   ReadInfo();
   while(Card[5][0] == 0 || Card[5][0] == j1 || Card[5][0] == j2 || Card[5][0] == j3 || Card[5][0] == carta1 || Card[5][0] == carta2 || Card[5][0] == carta3){
     Serial.println(F("Erro na leitura ou carta repetida. Tentando novamente..."));
-    printarlcd(F("Erro ou carta"), F("repetida!"));
+    printarlcd(F("Erro!"), F("Leia de novo!"));
     while( ! mfrc522.PICC_IsNewCardPresent()) {
 		delay(500);
 	}
@@ -918,8 +930,6 @@ int calcularconfianca(){
 //funçao que decide se o robo vai aceitar, fugir ou pedir um/retrucar um truco. -1 fugir, 0 aceitar, 1 pedir truco/retrucar
 int pensartrucorobo(){
   if(confianca > 90) return 1;
-
-  randomSeed(analogRead(A0));
   int rng = random(0,100);
 
   switch(pontosemjogo){
@@ -953,10 +963,11 @@ int pensartrucorobo(){
 //funçao que espera uma jogada do jogador, que pode ser uma funçao relacionada a truco, ou uma jogada normal. -1 fugir, 0 jogar normal, 1 truco
 int esperarjogador(){
   Serial.println("Esperando escolha do jogador...");
+  if(trucostate == 0) printarlcd(F("Sua vez."), F("Esperando..."));
   while(1){
     if(check(1)) return -1;
-    if(mfrc522.PICC_IsNewCardPresent()) return 0;
-    if(check(2)) return 1;
+    if(mfrc522.PICC_IsNewCardPresent() || check(2)) return 0;
+    if(check(3)) return 1;
     delay(25);
   }
 }
@@ -964,12 +975,25 @@ int esperarjogador(){
 //funçao para o truco. parametro indica quem esta chamando. retorna 0 se o truco nao foi valido, ou 1 se foi, ou -1 se fugiu.
 //parametro p: 1 se jogador chamou truco, 2 se robo chamou truco
 int truco(int p){
-  if(p == 2 && (quemchamou == 2 || probo + pontosemjogo > 12 || pjogador + pontosemjogo > 12)|| quemfugiu != 0) return 0;
-  if(p == 1 && (quemchamou == 1 || probo + pontosemjogo > 12 || pjogador + pontosemjogo > 12)){
+  if(p == 2 && (quemchamou == 2 || probo + pontosemjogo >= 12 || pjogador + pontosemjogo >= 12)|| quemfugiu != 0) return 0;
+  else if(p == 1 && (quemchamou == 1 || probo + pontosemjogo >= 12 || pjogador + pontosemjogo >= 12)){
+    if(pontosemjogo == 12){
+      Serial.print(F("Jogador aceita. A partida agora vale "));
+        printarlcd(F("Voce aceitou"), "Vale " + String(pontosemjogo) + " pts.");
+        Serial.print(String(pontosemjogo));
+        Serial.println(F(" pontos."));
+        delay(1500);
+        printarlcd(F("Continuando."), F("Sua vez."));
+        return 0;
+    }
     printarlcd(F("Truco"), F("invalido."));
+    delay(1000);
+    printarlcd(F("Sua vez."), F("Esperando..."));
     delay(1000);
     return 0;
   }
+  else if(quemfugiu != 0) return -1;
+  trucostate = 1;
   quemchamou = p;
 
   if(p == 1){
@@ -997,6 +1021,7 @@ int truco(int p){
       printarlcd(F("Eu fujo!"), "");
       delay(pensamento);
       quemfugiu = 2;
+      trucostate = 0;
       return 1;
       break;
 
@@ -1008,18 +1033,21 @@ int truco(int p){
       Serial.println(F(" pontos."));
       printarlcd(F("Eu aceito!"), ("Agora vale "+ String(pontosemjogo)));
       delay(pensamento);
+      printarlcd(F("Continuar"), F("o jogo."));
       break;
 
-      case 1: 
+      case 1:
       if(pontosemjogo == 1) pontosemjogo = 3;
       else pontosemjogo = pontosemjogo +3;
       truco(2);
+      trucostate = 0;
       return 1;
       break;
     }
   }
   if(p == 2){
     Serial.print(F("ROBO pede "));
+    servo4.write(120);
     switch(pontosemjogo){
       case 1: 
       Serial.println(F("Truco!"));
@@ -1038,9 +1066,10 @@ int truco(int p){
 
       case 9: 
       Serial.println(F("DOZE!"));
-      printarlcd(F("TUDO!!"), F("Aceita?"));
+      printarlcd(F("DOZE - TUDO!!"), F("Aceita?"));
       break;
     }
+    servo4.write(0);
     switch(esperarjogador()){
       case -1: 
       Serial.print(F("Jogador foge. Robo ganhou "));
@@ -1049,6 +1078,7 @@ int truco(int p){
       printarlcd(F("Voce fugiu."), "");
       delay(pensamento);
       quemfugiu = 1;
+      trucostate = 0;
       return 1;
       break;
 
@@ -1060,18 +1090,20 @@ int truco(int p){
       Serial.print(String(pontosemjogo));
       Serial.println(F(" pontos."));
       delay(1500);
-      printarlcd(F("Continuando."), F(""));
+      printarlcd(F("Continuar"), F("o jogo."));
       break;
 
       case 1: 
       if(pontosemjogo == 1) pontosemjogo = 3;
       else pontosemjogo = pontosemjogo +3;
       truco(1);
+      trucostate = 0;
       return 1;
       break;
     }
   }
   delay(1500);
+  trucostate = 0;
   return 1;
 }
 
@@ -1253,12 +1285,14 @@ int jogarmenor(){
 //robo joga uma carta (rng, podendo jogar a maior, a maior nao manilha, ou uma aleatoria), e espera uma jogada do usuario. retorna 2 se ganhou, 1 se empatou, 0 se perdeu
 //o parametro escolha pode ser colocado em 0 para nao usar rng nenhum, sempre jogando a maior
 int comecarrobo(int escolha){
+  // saida para o display
   Serial.println(F("Robo escolhendo carta..."));
   printarlcd(F("Minha vez."), F("Pensando..."));
   delay(pensamento);
+  //robô decide se vai pedir truco
   if(pensartrucorobo() == 1) truco(2);
-  if(quemfugiu != 0) return;
-  randomSeed(analogRead(A0));
+  if(quemfugiu != 0) return -1;
+  //estratégia do robô
   int rng = random(0,10);
   if(escolha == 0) rng = 0;
   int cartarobo = -1;
@@ -1275,9 +1309,10 @@ int comecarrobo(int escolha){
   }else{
     jogarmaior();
   }
-  printarlcd(F("Sua vez."), F("Esperando..."));
+  //ver se o jogador pediu truco
   if(esperarjogador() == 1) truco(1);
   if(quemfugiu != 0) return -1;
+  //ver jogada do jogador e retornar resultado da rodada
   cartajogador = lercarta();
   Serial.print(F("Você jogou: "));
   Serial.println(nomear(cartajogador));
@@ -1288,17 +1323,21 @@ int comecarrobo(int escolha){
 
 //robo joga a carta mais fraca que ganha se possivel, se nao empata, se nao joga a mais fraca; retorna 2 se ganhou a rodada, 1 se empatou, 0 se perdeu
 int responderrobo(){
-  printarlcd(F("Sua vez."), F("Esperando..."));
+  //ver se o jogador pediu um truco, e responder apropriadamente
   if(esperarjogador() == 1) truco(1);
   if(quemfugiu != 0) return -1;
   cartajogador = lercarta();
+  //output p/ serial
   Serial.print(F("Você jogou: "));
   Serial.println(nomear(cartajogador));
   Serial.println(F("Robo escolhendo carta..."));
   printarlcd(F("Minha vez."), F("Pensando..."));
   delay(pensamento);
+  //ver se o robo quer pedir truco
   if(pensartrucorobo() == 1) truco(2);
-  //ver se da pra ganhar, se nao joga a mais fraca
+  if(quemfugiu != 0) return -1;
+
+  //ver se da pra ganhar, se nao dá joga a mais fraca
   if(forca(carta1) < forca(cartajogador) && forca(carta2) < forca(cartajogador) && forca(carta3) < forca(cartajogador)){
     jogarmenor();
     return(0);
@@ -1378,7 +1417,7 @@ void novarodada(){
   }
   if(resultadomao1 == 1 && quemempatou1 == 1){
     resultadomao2 = responderrobo();
-    if(resultadomao2 == 1) quemempatou1 = 2;
+    if(resultadomao2 == 1) quemempatou2 = 2;
   }
   if(resultadomao1 == 0){
     resultadomao2 = responderrobo();
@@ -1456,7 +1495,9 @@ void verificarganhador(){
   }else{
    Serial.println(F("Erro: ganhador não encontrado."));
   }
-  delay(5000);
+  delay(2500);
+  printarlcd(F("Pontuacao final:"), "Voce " + String(pjogador) +"x"+ String(probo) + " Robo");
+  delay(2500);
   Serial.println(F("FIM DO JOGO. Iniciando novo jogo em 10 segundos..."));
   printarlcd(F("FIM DO JOGO."), F("Novo jogo em 10s"));
   delay(10000);
