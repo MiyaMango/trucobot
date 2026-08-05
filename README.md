@@ -53,7 +53,7 @@ The circuit diagram is as follows:
 
 <img width="1265" height="871" alt="Schematic_truco_2026-08-05(1)" src="https://github.com/user-attachments/assets/45953e1b-8108-4d8b-9ba6-06996dfa02fa" />
 
-## TO-DO LIST
+## TO-DO list
 The current goal of this project is to improve on the initial version, and make the construction of the robot a reproducible activity for educational purposes. As such, the planned features revolve around cleaning up existing code, and providing tutorials and tools for reproducing the project.
 
 Planned features:
